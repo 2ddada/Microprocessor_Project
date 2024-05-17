@@ -2,6 +2,8 @@
 //// 일정 수위 이하로 떨어지면 불 들어오도록
 /// 일단 DDRB 핀 첫번째, 두번째, 세번째에 꽂는다고 가정하고
 //// 수위는 400이하, 400~500, 500이상으로 된다고 짰음.
+//// 5v랑 ground 이런거 핀 어떻게 나눌지 생각좀 해야할듯
+
 
 #define NUM_LEDS 3
 #define ADC_RESOULUTION_IN_BITS 10    //<-- 필요없는건가?
@@ -52,14 +54,14 @@ void waterlevel_check(){
   uint16_t value = ADC;
 
   // 400이하라면 깜빡이는 기능까지 추가. 
-  if(value < 400){
+  if(value < 400){    /// 이게 최저점 의미는 맞는듯
     PORTB = (1 << PIN_of_LED_1) | ( 1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);
     delay(500);
     PORTB &= ~((1 << PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3));
     delay(500);
   }
 
-  else if(value > 400 && value < 500){
+  else if(value > 400 && value < 500){    // 두칸을 키려면 500말고 좀 더 큰 범위로 바꿔주면 될 듯? 
     PORTB = (1 << PIN_of_LED_1) | (1 << PIN_of_LED_2);
   }
   else {
