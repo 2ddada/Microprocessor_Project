@@ -23,7 +23,7 @@ void init_Serial(){
 void init_ADC(){
   ADMUX |= (0 << REFS1) | (1 << REFS0);
   ADMUX |= (0 << ADLAR);
-  ADMUX |= (0 << MUX3) | (0 << MUX2) | (0 << MUX1) | (0 << MUX0);
+  ADMUX |= (0 << MUX3) | (0 << MUX2) | (0 << MUX1) | (0 << MUX0);  //// 이거나중에수정해야해수정해야해
 
 
   ADCSRA |= (1 << ADEN);
@@ -40,8 +40,8 @@ void setup() {
 
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+void waterlevel_check(){
+  
   // Start ADC
 
   ADCSRA |= (1 << ADSC);
@@ -51,9 +51,14 @@ void loop() {
 
   uint16_t value = ADC;
 
+  // 400이하라면 깜빡이는 기능까지 추가. 
   if(value < 400){
-    PORTB = (1 << PIN_of_LED_1);
+    PORTB = (1 << PIN_of_LED_1) | ( 1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);
+    delay(500);
+    PORTB &= ~((1 << PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3));
+    delay(500);
   }
+
   else if(value > 400 && value < 500){
     PORTB = (1 << PIN_of_LED_1) | (1 << PIN_of_LED_2);
   }
@@ -65,4 +70,9 @@ void loop() {
   Serial.println(value);
   delay(100);
 
+}
+
+void loop(){
+  waterlevel_check();
+  
 }
