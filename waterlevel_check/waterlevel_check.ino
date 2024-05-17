@@ -1,14 +1,17 @@
 /////// 수위 조절
 //// 일정 수위 이하로 떨어지면 불 들어오도록
-/// 일단 3번 핀에 LED를 연결한다고 치자
-//// 그럼 짜피 const uint16_t step = pow( ~~~~ ) 얘들은 필요없는거?
+/// 일단 DDRB 핀 첫번째, 두번째, 세번째에 꽂는다고 가정하고
+//// 수위는 400이하, 400~500, 500이상으로 된다고 짰음.
 
-#define NUM_LEDS 1
-#define PIN_of_LED 3
+#define NUM_LEDS 3
+#define ADC_RESOULUTION_IN_BITS 10    //<-- 필요없는건가?
+#define PIN_of_LED_1 0
+#define PIN_of_LED_2 1
+#define PIN_of_LED_3 2
 
 void init_LED(){
-  //// LED 셋업시키기. DDRB = 0000 0100으로 되도록
-  DDRB |= (1<<PIN_of_LED);
+  //// LED 셋업시키기. DDRB = 0000 0111으로 되도록
+  DDRB |= (1<<PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);
 }
 
 void init_Serial(){
@@ -30,11 +33,36 @@ void init_ADC(){
 
 
 void setup() {
+  init_Serial();
+  init_ADC();
+  init_LED();
   // put your setup code here, to run once:
 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  // Start ADC
+
+  ADCSRA |= (1 << ADSC);
+
+  // Wait until ADC is completed
+  while(ADCSRA & (1 << ADSC));
+
+  uint16_t value = ADC;
+
+  if(value < 400){
+    PORTB = (1 << PIN_of_LED_1);
+  }
+  else if(value > 400 && value < 500){
+    PORTB = (1 << PIN_of_LED_1) | (1 << PIN_of_LED_2);
+  }
+  else {
+    PORTB = (1 << PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);
+
+  }
+
+  Serial.println(value);
+  delay(100);
 
 }
