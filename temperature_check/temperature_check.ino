@@ -7,7 +7,8 @@
 
 
 
-#define temp_pin 0x20
+#define led_insdie_pin 0x20
+
 
 // const uint16_t step = pow(2, ADC_RESOLUTION_IN_BITS)/NUM_LEDS;
 
@@ -15,7 +16,7 @@
 void init_LED(){
     //내장led 키려고 하는거니까 PortB의 5번 비트 출력으로 설정
     // DDRB = 0b 0010 0000
-    DDRB |= (1 << temp_pin);
+    DDRB |= (1 << led_insdie_pin);
 }
 
 
@@ -70,6 +71,11 @@ int8_t temp_check(){
     return temperature;
 }
 
+void serial_print(int8_t temperature){
+    Serial.print("Temperature: ");
+    Serial.println(temperature);
+    delay(30 * 1000);
+}
 
 void setup()
 {
@@ -81,11 +87,9 @@ void setup()
 void loop()
 {   
     int8_t temperature = temp_check();
-    if (temperature > 25) PORTB |= temp_pin;
-    else PORTB &= ~temp_pin;
+    if (temperature > 25) PORTB |= led_insdie_pin;
+    else PORTB &= ~led_insdie_pin;
 
-    Serial.print("Temperature: ");
-    Serial.println(temperature);
-    delay(1000);
+    serial_print(temperature);
 
 }
