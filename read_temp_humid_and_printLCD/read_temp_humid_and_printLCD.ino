@@ -2,6 +2,7 @@
 
 
 // LCD Display A4, A5 pin은 I2C 통신때문에 고정적으로 사용해야함!
+// DHT-22 센서는 digital pin
 
 
 
@@ -9,20 +10,25 @@
 
 #include <Wire.h>                     // i2C 통신을 위한 라이브러리
 #include <LiquidCrystal_I2C.h>        // LCD 2004 I2C용 라이브러리
+#include "DHT.h"                       // DHT 센서 라이브러리
 
 
 
 //-------------------define---------------------------------------------
+#define DHTTYPE DHT22   // DHT22 (AM2302) 센서종류 설정
+
 
 #define led_insdie_pin 0x20   // 내장 led pin번호
+#define DHTPIN 2        // SDA 핀의 설정
 
 
 
 //-------------------variables------------------------------------------
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);   // 접근주소: 0x3F or 0x27
+DHT dht(DHTPIN, DHTTYPE);
 
-int8_t temperature, humid;
+int8_t temperature, humidity;
 bool water_refill;
 
 
@@ -82,7 +88,7 @@ void init_ADC(){
 
 //-----------------------action------------------------------------------------
 
-void display_action(int8_t temperature, int8_t humid, bool water_refill)
+void display_action(int8_t temperature, int8_t humidity, bool water_refill)
 {
   lcd.setCursor(0, 0);             // 첫번째 줄 문자열 출력
   // lcd.print("                      "); // 비우기     
@@ -96,7 +102,7 @@ void display_action(int8_t temperature, int8_t humid, bool water_refill)
   // lcd.print("                       "); // 비우기     
   // lcd.setCursor(0, 1);
   lcd.print("Humidity : ");
-  lcd.print(humid);
+  lcd.print(humidity);
   lcd.print("%");
   
  
@@ -132,15 +138,24 @@ int8_t read_temperature(){
   // 이다음에 실제 온도값으로 변경
   // 계산과정에서 정수말고 실수로 될 수 도 있으니 float하고
   // datasheet 분석하면 T = 100Vout
-  int8_t temperature = (float)temp_temperature * 5.0 / 1024.0 * 100.0;
+
+  temperature = (float)temp_temperature * 5.0 / 1024.0 * 100.0;
   return temperature;
+}
+
+int8_t read_humidity(){
+  return (int8_t) dht.readHumidity();
 }
 
 
 
-void serial_print(int8_t temperature){
+void serial_print(int8_t temperature, int8_t humidity){
   Serial.print("Temperature: ");
-  Serial.println(temperature);
+  Serial.print(temperature);
+  Serial.print("°C, ");
+  Serial.print("Humidity: ");
+  Serial.print(humidity);
+  Serial.println("%");
   delay(1000);
 }
 
@@ -156,23 +171,23 @@ void setup() {
   init_Serial();
   init_ADC();
   init_insideLED();
-
-// 온도체크랑 lcd 합쳐볼 차례
-
-
+  dht.begin();
 }
+
 int testcount=0;
 void loop() {
   // put your main code here, to run repeatedly:
-  temperature = read_temperature();
+  temperature = (int8_t) read_temperature();
+  humidity = (int8_t) read_humidity();
   if (temperature > 25) PORTB |= led_insdie_pin;
   else PORTB &= ~led_insdie_pin;  
 
   if(testcount++%2==0) water_refill=true;
   else water_refill=false;
-  display_action(temperature, humid, water_refill);
-  serial_print(temperature);
+  display_action(temperature, humidity, water_refill);
+  serial_print(temperature, humidity);
 
 
   delay(1000); // 2초마다 업데이트
 }
+

@@ -81,7 +81,7 @@ void setup()
 {
   init_Serial();
   init_ADC();
-  init_LED();
+  init_insideLED();
 }
 
 void loop()
