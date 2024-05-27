@@ -13,7 +13,7 @@
 // const uint16_t step = pow(2, ADC_RESOLUTION_IN_BITS)/NUM_LEDS;
 
 
-void init_LED(){
+void init_insideLED(){
     //내장led 키려고 하는거니까 PortB의 5번 비트 출력으로 설정
     // DDRB = 0b 0010 0000
     DDRB |= (1 << led_insdie_pin);
