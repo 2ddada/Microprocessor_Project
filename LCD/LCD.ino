@@ -21,20 +21,31 @@ void display_setup()
   lcd.print("Water Refill!!");
 }
 
+<<<<<<< HEAD
 void display_action(int8_t temperature, int8_t humid, bool water_refill)
 {
   lcd.setCursor(0, 0);             // 첫번째 줄 문자열 출력
   lcd.print("Temperature : ");
   lcd.print(temperature);
   lcd.print("oC");
+=======
+void display_action(float temp, float humid, bool water_refill)
+{
+  lcd.setCursor(0, 0);             // 첫번째 줄 문자열 출력
+  lcd.print("Temperature : ");
+  lcd.print(temp);
+>>>>>>> 922546fa113dd26afedb504e6da59ef29c7aa539
  
   lcd.setCursor(0, 1);             // 두번째 줄 문자열 출력
   lcd.print("Humidity : ");
   lcd.print(humid);
+<<<<<<< HEAD
   lcd.print("%");
 
 
   
+=======
+>>>>>>> 922546fa113dd26afedb504e6da59ef29c7aa539
  
   lcd.setCursor(0, 2);             // 세번째 줄 문자열 출력
   lcd.print("Hello World!!");
@@ -49,8 +60,12 @@ void setup()
   display_setup();
 }
 
+<<<<<<< HEAD
 int count = 0;
 int8_t temperature, humid;
+=======
+float count = 0;
+>>>>>>> 922546fa113dd26afedb504e6da59ef29c7aa539
 
 void loop()
 { 
@@ -58,10 +73,18 @@ void loop()
   count++;
   if (count==8) count=0;
   
+<<<<<<< HEAD
   temperature = 25+count;
   humid = 60+count;
   bool water_refill = true;
 
   display_action(temperature, humid, water_refill);
+=======
+  float temp = 25.5+count;
+  float humid = 60.2+count;
+  bool water_refill = true;
+
+  display_action(temp, humid, water_refill);
+>>>>>>> 922546fa113dd26afedb504e6da59ef29c7aa539
   delay(2000); // 2초마다 업데이트
 }
