@@ -1,3 +1,6 @@
+//수정한 코드
+
+
 void heating_system()
 {
     #define OC0A 0b01000000 //6번핀 사용  5,6번핀은 쿨러 회전을 위한 핀.
@@ -8,14 +11,16 @@ void heating_system()
     DDRD|=(OC0A)|(OC0B); // 쿨러 회전을 위한 핀 설정. PWM을 사용해야 하기 때문에 꼭 해당 핀 사용
     //타이머 카운터 작동 모드 Fast PWM으로 설정.
     TCCR0A|=(1<<WGM01)|(1<<WGM00);
-    TCCR0B|=(0<<WGM02);
+    TCCR0B|=(1<<WGM02);
     //타이머 카운터가 동작하기 위해 사용되는 클럭 선택
-    TCCR0B|=(1<<CS02)|(1<<CS01)|(1<<CS00);
+    TCCR0B|=(1<<CS02)|(0<<CS01)|(1<<CS00);
 
     //OCOA의 출력모드 설정
     TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
     //OC0B의 출력 모드 설정
     TCCR0A|=(1<<COM0B1)|(0<<COM0B0);
+
+    TIMSK0|=(1<<OCIE0A)|(1<<OCIE0B);
 
 
 
