@@ -73,6 +73,19 @@ void waterlevel_check() {
   
 }
 
+void execute_waterlevel() {
+  static unsigned long lastMillis = 0;
+
+  if (millis() - lastMillis >= 1000) {
+    lastMillis = millis();
+    waterlevel_check();
+  }
+
+  //Serial.print("num  : ");
+  //Serial.println(num);
+}
+
+
 void setup() {
   pump_setup();
   init_Serial();
@@ -84,16 +97,7 @@ void setup() {
 // millis로 시행된지 얼마나 지났는지 읽어오고, 그게 1초보다 크면 waterlevel_check로 adc실행되도록
 // 
 void loop() {
-  static unsigned long lastMillis = 0;
-
-  if (millis() - lastMillis >= 1000) {
-    lastMillis = millis();
-    waterlevel_check();
-  }
-
-  //Serial.print("num  : ");
-  //Serial.println(num);
-  //delay(1000); // 인터럽트와 동기화
+  execute_waterlevel();
 }
 
 ISR(TIMER1_COMPA_vect) {
