@@ -14,7 +14,7 @@
 
 #include <Wire.h>                     // i2C 통신을 위한 라이브러리
 #include <LiquidCrystal_I2C.h>        // LCD 2004 I2C용 라이브러리
-#include "DHT.h"                       // DHT 센서 라이브러리
+#include "DHT.h"                     // DHT 센서 라이브러리
 
 
 
@@ -27,7 +27,7 @@
 
 
 #define Waterpump_Output_PIN_1 3 // 포트b의 3번째 핀
-#define Waterpump_Output_PIN_2 6 // 포트d의 6번째 핀
+#define Waterpump_Output_PIN_2 5 // 포트d의 6번째 핀
 #define Temperature_Input_PIN 0 // 온도 읽어올 핀
 #define Waterlevel_Input_PIN 2 // 수위 읽어올 핀
 
@@ -36,6 +36,10 @@
 #define LED_Output_PIN_2 1
 #define LED_Output_PIN_3 2
 
+#define OC0A 0b01000000 //6번핀 사용 쿨러 회전을 위한 핀.
+#define OC2B 0b00001000 //5번핀 사용 피에조 부조를 위한 핀.
+#define Relay_controll 0b10000000 //릴레이 제어하는 핀.
+
 
 
 //-------------------variables------------------------------------------
@@ -43,16 +47,30 @@
 LiquidCrystal_I2C lcd(0x27, 20, 4);   // 접근주소: 0x3F or 0x27
 DHT dht(DHTPIN, DHTTYPE);
 
-int8_t temperature, humidity;
+int16_t temperature, humidity, water_level;
 bool water_refill;
 
 
 volatile int num = 0;
 
+const float frequencies[7] = { 
+  392.00, // 솔 (G4)
+  392.00, // 솔 (G4)
+  440.00, // 라 (A4)
+  440.00, // 라 (A4)
+  392.00, // 솔 (G4)
+  392.00, // 솔 (G4)
+  329.63, // 미 (E4)
+};
+
+uint8_t freq_count=0;
+uint8_t flag=0;
+
 
 //----------------------------------ISR-------------------------------------------------
 
 ISR(TIMER1_COMPA_vect) {
+  // 펌프 작동하는 주기 관리
   num++;
   Serial.print("num check : ");
   Serial.println(num);
@@ -67,8 +85,35 @@ ISR(TIMER1_COMPA_vect) {
   }
   Serial.print("waterpump check : ");
   Serial.println(PORTB & (1 << Waterpump_Output_PIN_1));
-
 }
+
+ISR(TIMER0_COMPA_vect)
+{ // 버저에서 나는 소리 조절
+  if (flag == 1 && freq_count >= 0 && freq_count < 7)
+  {
+    freq_count+=1;
+  
+    float freq_target=frequencies[freq_count];
+  
+    OCR2A=F_CPU/256/freq_target-1;
+  
+    OCR2B=OCR2A/10000;
+  
+    for (uint16_t j=0;j<50;j++)
+    {
+      for (uint16_t i=0;i<64000;i++)
+      {
+        asm("nop");
+      }
+    }
+  }
+  else // 마지막 소리가 종료되면
+  {
+    flag = 0; // 플래그 설정하여 더 이상 ISR이 소리를 재생하지 않도록 함
+    freq_count = -1;
+  }
+}
+
 //------------------------------setup functions----------------------------------------------------
 
 //Serial communication setup
@@ -101,7 +146,9 @@ void init_insideLED(){
   DDRB |= (1 << led_insdie_pin);
 }
 
-
+void init_interrupt(){
+  SREG |= 0x01 << SREG_I;
+}
 
 //ADC setup
 void init_ADC(){
@@ -146,10 +193,47 @@ void init_LED() {
 }
 
 
+
+void relay_setup(){
+  DDRB|=Relay_controll; //릴레이 제어하는 핀-> 세라믹 히터 on//off
+
+}
+
+void fan_setup(){//팬은 Counter 0 사용
+
+  //타이머 카운터 작동 모드 Fast PWM으로 설정.
+  TCCR0A|=(1<<WGM01)|(1<<WGM00);
+  TCCR0B|=(0<<WGM02);
+  //타이머 카운터가 동작하기 위해 사용되는 클럭 선택
+  TCCR0B|=(0<<CS02)|(1<<CS01)|(1<<CS00);
+
+  //OCOA의 출력모드 설정
+  TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
+  //인터럽트 활성화
+  TIMSK0|=(1<<OCIE0A);
+
+  //팬의 dutycyle 조절
+  OCR0A=200;
+}
+
+void buzzer_setup(){
+  TCCR2A|=(1<<WGM21)|(1<<WGM20);
+  TCCR2B|=(1<<WGM22);
+  TCCR2B|=(1<<CS22)|(1<<CS21)|(0<<CS20);
+
+  TCCR2A|=(1<<COM2B1);
+
+  float freq_target=frequencies[freq_count];
+
+  OCR2A=F_CPU/256/freq_target-1;
+  OCR2B=OCR2A/2;
+}
 //-----------------------action------------------------------------------------
 
 void display_action(int8_t temperature, int8_t humidity, bool water_refill)
 {
+  lcd.clear();
+
   lcd.setCursor(0, 0);             // 첫번째 줄 문자열 출력
   // lcd.print("                      "); // 비우기     
   // lcd.setCursor(0, 0);
@@ -179,7 +263,7 @@ void display_action(int8_t temperature, int8_t humidity, bool water_refill)
 }
 
 
-int read_ADC(uint8_t pin) {
+int16_t read_ADC(uint8_t pin) {
   // ADC 채널 설정
   ADMUX = (ADMUX & 0xF0) | (pin & 0x0F);
   // ADC 변환 시작
@@ -195,7 +279,7 @@ int read_ADC(uint8_t pin) {
 // 일단은 interrupt 안하고 간단히 busywait으로 구현
 // busywait함수를 loop함수에 직접적으로 넣어야하나 아니면 개별 함수마다 넣어야하나?
 // 나중에 interrupt 구현하면 상관없을거같긴 한데 일단은 개별 함수마다 구현해야겠다
-int8_t read_temperature(){
+int16_t read_temperature(){
   // // 뭐 지금 당장은 ADC0으로 들어오게 한다 해야겠다
   // // !!!!!!!!!!!!!!!!!!통합할때 수정 필요!!!!!!!!!!!!!!!!!!!
   // ADMUX |= (0 << MUX3) | (0 << MUX2) | (0 << MUX1) | (0 << MUX0);
@@ -218,12 +302,12 @@ int8_t read_temperature(){
   return temperature;
 }
 
-int8_t read_humidity(){
-  return (int8_t) dht.readHumidity();
+int16_t read_humidity(){
+  return (int16_t) dht.readHumidity();
 }
 
-int8_t read_temperature_digital(){
-  return (int8_t) dht.readTemperature();
+int16_t read_temperature_digital(){
+  return (int16_t) dht.readTemperature();
 }
 
 
@@ -233,26 +317,25 @@ void waterlevel_check() {
   // while (ADCSRA & (1 << ADSC));
   // uint16_t value = ADC;
 
-  uint16_t value = read_ADC(Waterlevel_Input_PIN);
+  water_level = read_ADC(Waterlevel_Input_PIN);
 
-  if (value < 400) {
+  if (water_level < 400) {
     PORTB |= (1 << LED_Output_PIN_1) | (1 << LED_Output_PIN_2) | (1 << LED_Output_PIN_3);
-    delay(500);
+    // delay(500);
     PORTB &= ~((1 << LED_Output_PIN_1) | (1 << LED_Output_PIN_2) | (1 << LED_Output_PIN_3));
-    delay(500);
+    // delay(500);
 
     // else if 가 안돌아가는데 왜냐면 조금이라도 닿기만 하면 바로 1023이 나와서 그럼.....하 ...
     // 그럼 1023일때만 세개 다 켜지고 애매한 값일때는 두개만 켜지도록 해보자
-  } else if (value == 1023) {
+  } else if (water_level == 1023) {
     PORTB |= (1<< LED_Output_PIN_1) | (1 << LED_Output_PIN_2) | (1 << LED_Output_PIN_3);
   } else {
     PORTB &= ~(1 << LED_Output_PIN_3);  // 세번째 led는 끄고 2개만 키도록
     PORTB |= (1 << LED_Output_PIN_1) | (1 << LED_Output_PIN_2);
   }
 
-  Serial.print("waterlevel sensor value : ");
-  Serial.println(value);
-  
+  // Serial.print("waterlevel sensor value : ");
+  // Serial.println(water_level); 
 }
 
 void execute_waterlevel() {
@@ -274,7 +357,7 @@ void serial_print(int8_t temperature, int8_t humidity){
   Serial.print("Humidity: ");
   Serial.print(humidity);
   Serial.println("%");
-  delay(1000);
+  // delay(1000);
 }
 
 
@@ -285,13 +368,17 @@ void serial_print(int8_t temperature, int8_t humidity){
 
 void setup() {
   // put your setup code here, to run once:
-  display_setup();
   init_Serial();
+  display_setup();
   init_ADC();
+  init_interrupt();
   init_insideLED();
   dht.begin();
   pump_setup();
   init_LED();
+  relay_setup();
+  fan_setup();
+  buzzer_setup();
 }
 
 int testcount=0;
@@ -299,18 +386,56 @@ void loop() {
   // put your main code here, to run repeatedly:
 
 
-  temperature = (int8_t) read_temperature();
-  humidity = (int8_t) read_humidity();
+  // temperature = read_temperature_digital();
+  temperature = 20;
+  humidity = read_humidity();
+
   display_action(temperature, humidity, water_refill);
   serial_print(temperature, humidity);  
 
   execute_waterlevel();
 
 
+  //18도 이하일때
+  if(temperature <= 18){
+
+    //릴레이 on->세라믹 히터 on
+    PORTB|=Relay_controll;
+    //팬 끄기
+    PORTD &= ~(1<<OC0A);
+        OCR0A=0;
+
+    flag=1;
+    freq_count=0;
+  }
+
+  // 정상 온도일때
+  else if(temperature>18 & temperature<23){
+
+    // 릴레이 끄기 (히터 끄기)
+    PORTB &= ~Relay_controll;
+    //팬 끄기
+    PORTD &= ~(1<<OC0A);
+            OCR0A=0;
+
+
+    flag=1;
+    freq_count=0;
+  }
+
+  // 23도 이상일때
+  else{
+    // 릴레이 끄기 (히터 끄기)
+    PORTB &= ~Relay_controll;
+    //팬 켜기
+    PORTD |= (1<<OC0A);
+  }
+
+
   if(testcount++%2==0) water_refill=true;
   else water_refill=false;
 
 
-  delay(1000); // 2초마다 업데이트
+  delay(100); // 1초마다 업데이트
 }
 
