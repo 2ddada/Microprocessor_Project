@@ -61,7 +61,7 @@ void loop()
         PORTD|=Relay_controll;
         DDRD&=~(OC2B);
         
-        SREG&=~1<<SREG_I; //SREG레지스터의 I비트를 clear.->인터럽트 사용 x
+        TIMSK0&=~(1<<OCIE0A); //SREG레지스터의 I비트를 clear.->인터럽트 사용 x
 
         //듀티 사이클 설정을 위한 OCR0A,OCR0B값 설정. 0이면 duty cycle 0. 255이면 duty cycle 100.
         OCR0A=0;
@@ -73,7 +73,7 @@ void loop()
         PORTD&=~Relay_controll;
         DDRD&=~(OC2B);
         
-        SREG&=~(1<<SREG_I); //SREG레지스터의 I비트를 clear.->인터럽트 사용 x
+        TIMSK0&=~(1<<OCIE0A); //SREG레지스터의 I비트를 clear.->인터럽트 사용 x
 
         //듀티 사이클 설정을 위한 OCR0A,OCR0B값 설정. 0이면 duty cycle 0. 255이면 duty cycle 100.
         OCR0A=0;
@@ -85,7 +85,7 @@ void loop()
     {
         PORTD&=~Relay_controll;
         DDRD|=OC2B;
-        SREG|=1<<SREG_I; //SREG레지스터의 I비트를 set.->인터럽트 사용 o
+        TIMSK0|=(1<<OCIE0A); //SREG레지스터의 I비트를 set.->인터럽트 사용 o
   
         //듀티 사이클 설정을 위한 ,OCR0B값 설정. 0이면 duty cycle 0. 255이면 duty cycle 100.
         OCR0A=200;
@@ -116,5 +116,6 @@ ISR(TIMER0_COMPA_vect)
   else // 마지막 소리가 종료되면
   {
     flag = 0; // 플래그 설정하여 더 이상 ISR이 소리를 재생하지 않도록 함
+    freq_count=-1;
   }
 }
