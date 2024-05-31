@@ -9,6 +9,13 @@
 // 일단 하나 새거 주문하긴 했는데.
 // 기본적으로, num은 인터럽트가 생기는 주기(1초)마다 1씩 커지는 것으로 잡아 두었음. 
 
+//
+
+
+// fan은 timer 0
+// 펌프는 timer 1
+// 피에조 부저 2
+
 
 //---------------------------header files---------------------
 
@@ -27,7 +34,7 @@
 
 
 #define Waterpump_Output_PIN_1 3 // 포트b의 3번째 핀
-#define Waterpump_Output_PIN_2 5 // 포트d의 6번째 핀
+#define Waterpump_Output_PIN_2 5 // 포트d의 5번째 핀
 #define Temperature_Input_PIN 0 // 온도 읽어올 핀
 #define Waterlevel_Input_PIN 2 // 수위 읽어올 핀
 
@@ -37,7 +44,7 @@
 #define LED_Output_PIN_3 2
 
 #define OC0A 0b01000000 //6번핀 사용 쿨러 회전을 위한 핀.
-#define OC2B 0b00001000 //5번핀 사용 피에조 부조를 위한 핀.
+#define OC2B 0b00001000 //3번핀 사용 피에조 부조를 위한 핀. ,PORTD의 3번 비트
 #define Relay_controll 0b10000000 //릴레이 제어하는 핀.
 
 
@@ -63,8 +70,7 @@ const float frequencies[7] = {
   329.63, // 미 (E4)
 };
 
-uint8_t freq_count=0;
-uint8_t flag=0;
+uint8_t sound_state_flag=0; // 0이면 아예 실행할 필요 없는 상황, 1이면 최초 진입 후 한 사이클 실행중, 2이면 이미 한번 실행 완료했으니 더이상 신경 안쓰기
 
 
 //----------------------------------ISR-------------------------------------------------
@@ -72,8 +78,10 @@ uint8_t flag=0;
 ISR(TIMER1_COMPA_vect) {
   // 펌프 작동하는 주기 관리
   num++;
-  Serial.print("num check : ");
-  Serial.println(num);
+  // Serial.print("num check : ");
+  // Serial.println(num);
+  // Serial.print("Debugging : TIMER1_COMPA ISR(1초씩 세는거)) execution times : ");
+  // Serial.println(num);
   // 5초동안 펌프를 켜기. 작동 시간 바꾸고 싶으면 아래 숫자만 바꿔주면 끝.
   if (num > 10 && num <= 15) {
     PORTB &= ~(1 << Waterpump_Output_PIN_1);
@@ -83,35 +91,46 @@ ISR(TIMER1_COMPA_vect) {
   } else {
     PORTB |= (1 << Waterpump_Output_PIN_1);
   }
-  Serial.print("waterpump check : ");
-  Serial.println(PORTB & (1 << Waterpump_Output_PIN_1));
+  // Serial.print("waterpump check : ");
+  // Serial.println(PORTB & (1 << Waterpump_Output_PIN_1));
 }
 
 ISR(TIMER0_COMPA_vect)
 { // 버저에서 나는 소리 조절
-  if (flag == 1 && freq_count >= 0 && freq_count < 7)
-  {
-    freq_count+=1;
+  // static int debuggingnum = 0;
+  // debuggingnum++;
+
+  // if (debuggingnum%100 == 0){
+  //   Serial.print("Debugging : TIMER0_COMPA ISR (팬 쓰는거) execution times : ");
+  //    Serial.println(debuggingnum);
+  // }
+
+  // if (flag == 1 && freq_count >= 0 && freq_count < 7)
+  // {
+  //   freq_count+=1;
   
-    float freq_target=frequencies[freq_count];
+  //   float freq_target=frequencies[freq_count];
   
-    OCR2A=F_CPU/256/freq_target-1;
+  //   OCR2A=F_CPU/256/freq_target-1;
   
-    OCR2B=OCR2A/10000;
-  
-    for (uint16_t j=0;j<50;j++)
-    {
-      for (uint16_t i=0;i<64000;i++)
-      {
-        asm("nop");
-      }
-    }
-  }
-  else // 마지막 소리가 종료되면
-  {
-    flag = 0; // 플래그 설정하여 더 이상 ISR이 소리를 재생하지 않도록 함
-    freq_count = -1;
-  }
+  //   OCR2B=OCR2A/10000;
+
+  //   Serial.println("Debugging : nop executed ");
+
+  //   for (uint16_t j=0;j<50;j++)
+  //   {
+  //     for (uint16_t i=0;i<64000;i++)
+  //     {
+  //       asm("nop");
+  //     }
+  //   }
+  // }
+  // else // 마지막 소리가 종료되면
+  // {
+  //   flag = 0; // 플래그 설정하여 더 이상 ISR이 소리를 재생하지 않도록 함
+  //   freq_count = -1;
+  //   TIMSK2 &= ~(1<<OCIE2A);
+  // }
 }
 
 //------------------------------setup functions----------------------------------------------------
@@ -128,16 +147,16 @@ void display_setup()
   lcd.backlight();                 // 백라이트 켜기
   
   lcd.setCursor(0, 0);             // 첫번째 줄 문자열 출력
-  lcd.print("Temperature : ??");
- 
+  lcd.print("Hello World!!");
+
   lcd.setCursor(0, 1);             // 두번째 줄 문자열 출력
-  lcd.print("Humidity : ??");
+  lcd.print("Welcome to our SmartFarm!");
  
   lcd.setCursor(0, 2);             // 세번째 줄 문자열 출력
-  lcd.print("Hello World!!");
+  lcd.print("Now booting.......");
   
   lcd.setCursor(0, 3);             // 네번째 줄 문자열 출력
-  lcd.print("Water Refill!!");
+  lcd.print("Now booting.......");
 }
 
 void init_insideLED(){
@@ -210,7 +229,7 @@ void fan_setup(){//팬은 Counter 0 사용
   //OCOA의 출력모드 설정
   TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
   //인터럽트 활성화
-  TIMSK0|=(1<<OCIE0A);
+  // TIMSK0|=(1<<OCIE0A);
 
   //팬의 dutycyle 조절
   OCR0A=200;
@@ -223,10 +242,10 @@ void buzzer_setup(){
 
   TCCR2A|=(1<<COM2B1);
 
-  float freq_target=frequencies[freq_count];
+  // float freq_target=frequencies[freq_count];
 
-  OCR2A=F_CPU/256/freq_target-1;
-  OCR2B=OCR2A/2;
+  // OCR2A=F_CPU/256/freq_target-1;
+  // OCR2B=OCR2A/2;
 }
 //-----------------------action------------------------------------------------
 
@@ -360,11 +379,44 @@ void serial_print(int8_t temperature, int8_t humidity){
   // delay(1000);
 }
 
+void sound_play(){
+  static int freq_count=0;
+  DDRD |= OC2B;  // OC2B (PORTD의 3번비트) output모드로
 
-//-------------------------MAIN FUNCTION------------------------------
+  if (freq_count >= 0 && freq_count < 7)
+  {
+    PORTD |= OC2B;  // OC2B (PORTD의 3번비트) 출력 주기
 
 
+    float freq_target=frequencies[freq_count];
 
+    OCR2A=F_CPU/256/freq_target-1; // 목표 freq에 맞는 출력 나오게 OCR2A 설정
+
+    OCR2B=OCR2A/1000; // 실제 출력할 것의 dutycyle 설정
+
+    Serial.println("Debugging : nop executed ");
+
+    for (uint16_t j=0;j<50;j++)
+    {
+      for (uint16_t i=0;i<64000;i++)
+      {
+        asm("nop");
+      }
+    }
+    freq_count+=1;
+  }
+  if(freq_count >= 7){    // 출력 마무리작업 (초기상태로 되돌리기)
+
+    PORTD&=~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
+    freq_count = 0;   // 음계 index 초기화
+    sound_state_flag = 2; // 재생 완료했다고 flag 설정
+
+
+  }
+}
+
+
+//-------------------------MAIN FUNCTION--------------------------------------
 
 void setup() {
   // put your setup code here, to run once:
@@ -381,13 +433,10 @@ void setup() {
   buzzer_setup();
 }
 
-int testcount=0;
+
 void loop() {
-  // put your main code here, to run repeatedly:
 
-
-  // temperature = read_temperature_digital();
-  temperature = 20;
+  temperature = read_temperature_digital();
   humidity = read_humidity();
 
   display_action(temperature, humidity, water_refill);
@@ -395,166 +444,23 @@ void loop() {
 
   execute_waterlevel();
 
-
-  //18도 이하일때
-  if(temperature <= 18){
-
-    //릴레이 on->세라믹 히터 on
-    PORTB|=Relay_controll;
-    //팬 끄기
-    PORTD &= ~(1<<OC0A);
-
-    flag=1;
-    freq_count=0;
+  if(temperature <= 18){  //18도 이하일때
+    PORTB|=Relay_controll;    //릴레이 on->세라믹 히터 on
+    PORTD &= ~(1<<OC0A);    //팬 끄기
   }
-
-  // 정상 온도일때
-  else if(temperature>18 & temperature<23){
-
-    // 릴레이 끄기 (히터 끄기)
-    PORTB &= ~Relay_controll;
-    //팬 끄기
-    PORTD &= ~(1<<OC0A);
-
-
-    flag=1;
-    freq_count=0;
+  else if(temperature>18 & temperature<23){  // 정상 온도일때
+    PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
+    PORTD &= ~(1<<OC0A);    //팬 끄기
   }
-
-  // 23도 이상일때
-  else{
-    // 릴레이 끄기 (히터 끄기)
-    PORTB &= ~Relay_controll;
-    //팬 켜기
-    PORTD |= (1<<OC0A);
+  else{  // 23도 이상일때
+    PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
+    PORTD |= (1<<OC0A);    //팬 켜기
+    if(sound_state_flag != 2) sound_state_flag = 1; // 이미 완료된 상태가 아니라면 (첫 진입이라면) flag 1로 설정
+    if(sound_state_flag == 1) sound_play(); // 아직 완료된 상태가 아니라면 소리 재생
   }
-
-
-  if(testcount++%2==0) water_refill=true;
-  else water_refill=false;
-
-
-  delay(100); // 1초마다 업데이트
-}
-
-//완벽한 코드 이걸로 사용
-
-#define OC0A 0b01000000 //6번핀 사용 쿨러 회전을 위한 핀.
-#define OC2B 0b00001000 //5번핀 사용 피에조 부조를 위한 핀.
-#define Relay_controll (1<<PD7) //릴레이 제어하는 핀은 8번핀.
-
-uint16_t temperature=25.0;
-
-const float frequencies[7] = { 
-  392.00, // 솔 (G4)
-  392.00, // 솔 (G4)
-  440.00, // 라 (A4)
-  440.00, // 라 (A4)
-  392.00, // 솔 (G4)
-  392.00, // 솔 (G4)
-  329.63, // 미 (E4)
-};
-
-uint8_t freq_count=0;
-uint8_t flag=1;
-
-
-void setup()
-{
-    DDRD|=Relay_controll; //릴레이 제어하는 핀-> 세라믹 히터 on//off
-    DDRD|=(OC0A)|(OC2B); // 쿨러 회전을 위한 핀 설정. PWM을 사용해야 하기 때문에 꼭 해당 핀 사용
-    
-
-    //타이머 카운터 작동 모드 Fast PWM으로 설정.
-    TCCR0A|=(1<<WGM01)|(1<<WGM00);
-    TCCR0B|=(0<<WGM02);
-    //타이머 카운터가 동작하기 위해 사용되는 클럭 선택
-    TCCR0B|=(0<<CS02)|(1<<CS01)|(1<<CS00);
-
-    //OCOA의 출력모드 설정
-    TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
-    //인터럽트 활성화
-    TIMSK0|=(1<<OCIE0A);
-
-    TCCR2A|=(1<<WGM21)|(1<<WGM20);
-    TCCR2B|=(1<<WGM22);
-    TCCR2B|=(1<<CS22)|(1<<CS21)|(0<<CS20);
-
-    TCCR2A|=(1<<COM2B1);
-
-    float freq_target=frequencies[freq_count];
-
-    OCR2A=F_CPU/256/freq_target-1;
-    OCR2B=OCR2A/2;
-
-
-
+  delay(1000); // 1초마다 업데이트
 }
 
 
-void loop()
-{
-    if (temperature<=18.0)
-    {
-        //릴레이 on->세라믹 히터 on
-        PORTD|=Relay_controll;
-        DDRD&=~(OC2B);
-        
-        SREG&=~1<<SREG_I; //SREG레지스터의 I비트를 clear.->인터럽트 사용 x
 
-        //듀티 사이클 설정을 위한 OCR0A,OCR0B값 설정. 0이면 duty cycle 0. 255이면 duty cycle 100.
-        OCR0A=0;
-        freq_count=0;
-        flag=1;
-    }
-    else if (temperature>18.0 && temperature<23.0)
-    {
-        PORTD&=~Relay_controll;
-        DDRD&=~(OC2B);
-        
-        SREG&=~(1<<SREG_I); //SREG레지스터의 I비트를 clear.->인터럽트 사용 x
-
-        //듀티 사이클 설정을 위한 OCR0A,OCR0B값 설정. 0이면 duty cycle 0. 255이면 duty cycle 100.
-        OCR0A=0;
-        freq_count=0;
-        flag=1;
-    }
-
-    else
-    {
-        PORTD&=~Relay_controll;
-        DDRD|=OC2B;
-        SREG|=1<<SREG_I; //SREG레지스터의 I비트를 set.->인터럽트 사용 o
-  
-        //듀티 사이클 설정을 위한 ,OCR0B값 설정. 0이면 duty cycle 0. 255이면 duty cycle 100.
-        OCR0A=200;
-    }
-
-}
-
-ISR(TIMER0_COMPA_vect)
-{
-  if (flag == 1 && freq_count >= 0 && freq_count < 7)
-  {
-    freq_count+=1;
-  
-    float freq_target=frequencies[freq_count];
-  
-    OCR2A=F_CPU/256/freq_target-1;
-  
-    OCR2B=OCR2A/10000;
-  
-    for (uint16_t j=0;j<50;j++)
-    {
-      for (uint16_t i=0;i<64000;i++)
-      {
-        asm("nop");
-      }
-    }
-  }
-  else // 마지막 소리가 종료되면
-  {
-    flag = 0; // 플래그 설정하여 더 이상 ISR이 소리를 재생하지 않도록 함
-  }
-}
 
