@@ -43,7 +43,7 @@
 #define LED_Output_PIN_G 0
 #define LED_Output_PIN_Y 2
 
-#define OC0A 0b01000000 //6번핀 사용 쿨러 회전을 위한 핀.
+#define OC0A 0b01000000 //6번핀 사용 쿨러 회전을 위한 핀., PORTD의 6번 비트
 #define OC2B 0b00001000 //3번핀 사용 피에조 부조를 위한 핀. ,PORTD의 3번 비트
 #define Relay_controll 0b10000000 //릴레이 제어하는 핀.
 
@@ -224,6 +224,8 @@ void relay_setup(){
 
 void fan_setup(){//팬은 Counter 0 사용
 
+  DDRD |= OC0A;
+
   //타이머 카운터 작동 모드 Fast PWM으로 설정.
   TCCR0A|=(1<<WGM01)|(1<<WGM00);
   TCCR0B|=(0<<WGM02);
@@ -231,7 +233,10 @@ void fan_setup(){//팬은 Counter 0 사용
   TCCR0B|=(0<<CS02)|(1<<CS01)|(1<<CS00);
 
   //OCOA의 출력모드 설정
-  TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
+  // TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
+  TCCR0A &= ~((1<<COM0A1)|(1<<COM0A0));
+
+
   //인터럽트 활성화
   // TIMSK0|=(1<<OCIE0A);
 
@@ -347,11 +352,13 @@ void waterlevel_check() {
   // // water_level = 300;
   // Serial.print("water_level : ");
   // Serial.println(water_level);
+}
 
+void execute_waterpump(){
   // 펌프 실행
   pumptime_num = time_count % 15;
-  Serial.print("time_count : ");
-  Serial.println(time_count);
+  // Serial.print("time_count : ");
+  // Serial.println(time_count);
   // Serial.print("pumptime_num : ");
   // Serial.println(pumptime_num);
   if (pumptime_num >= 10) PORTB &= ~(1 << Waterpump_Output_PIN_1);
@@ -392,16 +399,6 @@ void waterlevel_check() {
   // Serial.println(water_level); 
 }
 
-// void execute_waterlevel() {
-//   static unsigned long lastMillis = 0;
-//   if (millis() - lastMillis >= 1000) {
-//     lastMillis = millis();
-//     waterlevel_check();
-//   }
-
-//   //Serial.print("num  : ");
-//   //Serial.println(num);
-// }
 
 
 void serial_print(int8_t temperature, int8_t humidity){
@@ -414,40 +411,6 @@ void serial_print(int8_t temperature, int8_t humidity){
   // delay(1000);
 }
 
-// void sound_play(){
-//   static int freq_count=0;
-//   DDRD |= OC2B;  // OC2B (PORTD의 3번비트) output모드로
-
-//   if (freq_count >= 0 && freq_count < 7)
-//   {
-//     PORTD |= OC2B;  // OC2B (PORTD의 3번비트) 출력 주기
-
-
-//     float freq_target=frequencies[freq_count];
-
-//     OCR2A=F_CPU/256/freq_target-1; // 목표 freq에 맞는 출력 나오게 OCR2A 설정
-
-//     OCR2B=OCR2A/100; // 실제 출력할 것의 dutycyle 설정
-
-//     Serial.println("Debugging : nop executed ");
-
-//     for (uint16_t j=0;j<50;j++)
-//     {
-//       // for (uint16_t i=0;i<64000;i++)
-//       for (uint16_t i=0;i<32000;i++)
-//       {
-//         asm("nop");
-//       }
-//     }
-//     freq_count+=1;
-//   }
-//   if(freq_count >= 7){    // 출력 마무리작업 (초기상태로 되돌리기)
-  
-//     PORTD&=~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
-//     freq_count = 0;   // 음계 index 초기화
-//     sound_state_flag = 2; // 재생 완료했다고 flag 설정
-//   }
-// }
 void sound_play(){
   static int freq_count=0;
   DDRD |= OC2B;  // OC2B (PORTD의 3번비트) output모드로
@@ -475,10 +438,8 @@ void sound_play(){
   else if (freq_count >= 7)
   {    // 출력 마무리작업 (초기상태로 되돌리기)
     PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
-
     // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
     TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
-    // TCCR2B &= ~((1 << CS22) | (1 << CS21) | (0 << CS20));
 
     freq_count = 0;   // 음계 index 초기화
     sound_state_flag = 2; // 재생 완료했다고 flag 설정
@@ -508,48 +469,48 @@ void setup() {
 
 void loop() {
 
-  // temperature = read_temperature_digital();
-  // temperature = 25;
-  if(time_count <15 ) temperature = 25;
-  if(time_count >15 & time_count < 20 ) temperature = 20;
-  if(time_count >20 ) temperature = 25;
-  
+  temperature = read_temperature_digital();  
   humidity = read_humidity();
-
   display_action(temperature, humidity, water_refill);
   serial_print(temperature, humidity);  
 
-  // execute_waterlevel();
   waterlevel_check();
+  execute_waterpump();
 
   if(temperature <= 18){  //18도 이하일때
     // Serial.println("temp under 18 entered");
     sound_state_flag = 0;
     PORTB|=Relay_controll;    //릴레이 on->세라믹 히터 on
-    OCR0A = 0;
-    // TCCR0A &= ~ ( (1 << COM0A1) | (1 << COM0A0) );   // 팬 끄기
-    // PORTD &= ~(1<<OC0A);    //팬 끄기
-
+    
+    // 팬 끄기
+    TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+    PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
   }
   else if(temperature>18 & temperature<23){  // 정상 온도일때
     sound_state_flag = 0;
     PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
-        Serial.print("Flag : ");
 
-    Serial.println(sound_state_flag);
+    Serial.println("inside if 18 23");
 
-    PORTD &= ~(1<<OC0A);    //팬 끄기
-    PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
-    // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
-    TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
+    // 팬 끄기
+    TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+    PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+ 
   }
   else{  // 23도 이상일때
     PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
-    PORTD |= (1<<OC0A);    //팬 켜기
+
+    //팬 켜기
+    PORTD |= OC0A;  // OC0A(PORTD의 6번비트)출력 주기
+    TCCR0A|=(1<<COM0A1); // TIMER0 켜기
+
     if(sound_state_flag != 2) sound_state_flag = 1; // 이미 완료된 상태가 아니라면 (첫 진입이라면) flag 1로 설정
-    Serial.print("Flag : ");
-    Serial.println(sound_state_flag);
     if(sound_state_flag == 1) sound_play(); // 아직 완료된 상태가 아니라면 소리 재생
+
+    // PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
+    // // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
+    // TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
+    
   }
   delay(1000); // 1초마다 업데이트
 }
