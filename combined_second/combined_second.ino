@@ -61,6 +61,7 @@ void waterlevel_check() {
     delay(500);
 
     // else if 가 안돌아가는데 왜냐면 조금이라도 닿기만 하면 바로 1023이 나와서 그럼.....하 ...
+    
     // 그럼 1023일때만 세개 다 켜지고 애매한 값일때는 두개만 켜지도록 해보자
   } else if (value == 1023) {
     PORTB |= (1<< PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);

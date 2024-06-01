@@ -54,16 +54,19 @@ void waterlevel_check(){
   uint16_t value = ADC;
 
   // 400이하라면 깜빡이는 기능까지 추가. 
-  if(value < 400){    /// 이게 최저점 의미는 맞는듯
+
+  if(value < 400){    // 400 이하라면 깜빡이도록.
     PORTB = (1 << PIN_of_LED_1) | ( 1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);
     delay(500);
     PORTB &= ~((1 << PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3));
     delay(500);
   }
 
-  else if(value > 400 && value < 500){    // 두칸을 키려면 500말고 좀 더 큰 범위로 바꿔주면 될 듯? 
+  else if(value > 400 && value < 500){    // LED 3개중에서 2개만 키는 코드.
     PORTB = (1 << PIN_of_LED_1) | (1 << PIN_of_LED_2);
   }
+
+  //500이상 값이 들어온다면 LED가 3개 다 켜지도록.
   else {
     PORTB = (1 << PIN_of_LED_1) | (1 << PIN_of_LED_2) | (1 << PIN_of_LED_3);
 
