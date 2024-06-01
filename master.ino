@@ -54,7 +54,12 @@
 LiquidCrystal_I2C lcd(0x27, 20, 4);   // 접근주소: 0x3F or 0x27
 DHT dht(DHTPIN, DHTTYPE);
 
-int16_t temperature, humidity, water_level;
+int16_t temperature, humidity, mean_water_level, temp_water_level;
+
+int water_index = 0;
+
+int16_t water_level[10];
+
 bool water_refill;
 
 
@@ -348,10 +353,23 @@ void waterlevel_check() {
   // while (ADCSRA & (1 << ADSC));
   // uint16_t value = ADC;
 
-  water_level = read_ADC(Waterlevel_Input_PIN);
+  temp_water_level = read_ADC(Waterlevel_Input_PIN);
+
+  Serial.print("waterlevel sensor value : ");
+  Serial.print(temp_water_level); 
+  int16_t sum = 0;
+
+  water_level[(water_index++) % 10] = temp_water_level;
+  for(int i=0 ; i<10; i++){
+    sum += water_level[i];
+  }
+  mean_water_level = sum / 10;
+
+  Serial.print(",  mean value : ");
+  Serial.println(mean_water_level);
   // // water_level = 300;
-  // Serial.print("water_level : ");
-  // Serial.println(water_level);
+  // Serial.print("mean water_level : ");
+  // Serial.println(meaa water_level);
 }
 
 void execute_waterpump(){
@@ -364,7 +382,7 @@ void execute_waterpump(){
   if (pumptime_num >= 10) PORTB &= ~(1 << Waterpump_Output_PIN_1);
   else PORTB |= (1 << Waterpump_Output_PIN_1);
 
-  if (water_level < 400) { // 물 보충 필요할 때 : 빨간색 LED가 깜빡, water_refill 변수 true로
+  if (mean_water_level < 400) { // 물 보충 필요할 때 : 빨간색 LED가 깜빡, water_refill 변수 true로
     if(time_count % 2 == 0){
       PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
     }else{
@@ -381,7 +399,7 @@ void execute_waterpump(){
     // else if 가 안돌아가는데 왜냐면 조금이라도 닿기만 하면 바로 1023이 나와서 그럼.....하 ...
     // 그럼 1023일때만 세개 다 켜지고 애매한 값일때는 두개만 켜지도록 해보자
   }
-  else if (water_level>=400 && water_level<600) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
+  else if (mean_water_level>=400 && mean_water_level<600) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
     PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
     // Serial.print("e");
     if(time_count % 2 == 0){
@@ -395,8 +413,6 @@ void execute_waterpump(){
     PORTB |= (1 << LED_Output_PIN_G);
   }
 
-  // Serial.print("waterlevel sensor value : ");
-  // Serial.println(water_level); 
 }
 
 
@@ -472,7 +488,7 @@ void loop() {
   temperature = read_temperature_digital();  
   humidity = read_humidity();
   display_action(temperature, humidity, water_refill);
-  serial_print(temperature, humidity);  
+  // serial_print(temperature, humidity);  
 
   waterlevel_check();
   execute_waterpump();
