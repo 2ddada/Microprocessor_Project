@@ -244,7 +244,7 @@ void display_action(int8_t temperature, int8_t humidity, bool water_refill, char
  
   lcd.setCursor(0, 2);             // 세번째 줄 문자열 출력
   lcd.print("Current mode : ");
-  lcd.print(usermode ? "Usermode" : "Automode");
+  lcd.print(c == 'a' | 'b' ? "User" : "Auto");
 
   
   lcd.setCursor(0, 3);             // 네번째 줄 문자열 출력
@@ -255,6 +255,9 @@ void display_action(int8_t temperature, int8_t humidity, bool water_refill, char
   else{ // 자동모드면 물 보충여부 출력  
     lcd.print("Operating : ");
     switch(c){
+      case 'b':
+        lcd.print("SELECTING");
+        break;
       case 'c':
         lcd.print("Fan ON");
         break;
@@ -397,12 +400,12 @@ void waterlevel_check() {
 void execute_waterpump(){
   // 펌프 실행
   pumptime_num = time_count % 15;
-  // Serial.print("time_count : ");
-  // Serial.println(time_count);
-  // Serial.print("pumptime_num : ");
-  // Serial.println(pumptime_num);
-  if (pumptime_num >= 10) PORTB &= ~(1 << Waterpump_Output_PIN_1);
-  else PORTB |= (1 << Waterpump_Output_PIN_1);
+  Serial.print("time_count : ");
+  Serial.println(time_count);
+  Serial.print("pumptime_num : ");
+  Serial.println(pumptime_num);
+  if (pumptime_num >= 10) PORTB |= (1 << Waterpump_Output_PIN_1);
+  else PORTB &= ~(1 << Waterpump_Output_PIN_1);
 
 }
 
@@ -421,12 +424,12 @@ void serial_print(int8_t temperature, int8_t humidity){
 // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
 void sound(int8_t sound_select){
 
-  Serial.print("sound_select : ");
-  Serial.println(sound_select);
+  // Serial.print("sound_select : ");
+  // Serial.println(sound_select);
 
-  Serial.print("chaged to 0 : flag ");
+  // Serial.print("chaged to 0 : flag ");
   bool other_sound_check = false;
-  for(int i=0; i<4; i++){
+  for(int i=0; i< sound_select ; i++){
     if(i != sound_select){
       if(sound_state_flag[i] != 0)  other_sound_check = true;
     }
@@ -436,11 +439,11 @@ void sound(int8_t sound_select){
   for(int i=0; i<4; i++){
     if(i != sound_select){
       sound_state_flag[i] = 0;
-      Serial.print(i);
-      Serial.print(", ");
+      // Serial.print(i);
+      // Serial.print(", ");
     }
   }
-      Serial.println("");
+      // Serial.println("");
   if (sound_select == -1) return;
   // Serial.print("Sound select right before ~ : ");
   // Serial.println(sound_state_flag[sound_select]);
@@ -454,7 +457,7 @@ void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
   static int freq_count=0;
   static uint8_t i = sound_select;
 
-  Serial.println("inside soudnplay 1");
+  // Serial.println("inside soudnplay 1");
 
   DDRD |= OC2B;  // OC2B (PORTD의 3번비트) output모드로
 
@@ -476,10 +479,10 @@ void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
     //     asm("nop");
     //   }
     // }
-    Serial.print("freq_count, flag[i] : ");
-    Serial.print(freq_count);
-    Serial.print(", ");
-    Serial.println(sound_state_flag[i]);
+    // Serial.print("freq_count, flag[i] : ");
+    // Serial.print(freq_count);
+    // Serial.print(", ");
+    // Serial.println(sound_state_flag[i]);
     freq_count += 1;
   }
   else if (freq_count >= 7)
@@ -487,14 +490,14 @@ void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
     PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
     // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
     TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
-    Serial.print("freq_count, flag[i] : ");
-    Serial.print(freq_count);
-    Serial.print(", ");
-    Serial.println(sound_state_flag[i]);
+    // Serial.print("freq_count, flag[i] : ");
+    // Serial.print(freq_count);
+    // Serial.print(", ");
+    // Serial.println(sound_state_flag[i]);
     freq_count = 0;   // 음계 index 초기화
     sound_state_flag[i] = 2; // 재생 완료했다고 flag 설정
-    Serial.print("After flag change : flag");
-    Serial.println(sound_state_flag[i]);
+    // Serial.print("After flag change : flag");
+    // Serial.println(sound_state_flag[i]);
   }
 }
 
@@ -569,10 +572,17 @@ void loop() {
 
   // 온습도 읽기 및 LCD 출력
   // temperature = read_temperature_digital();
+
+  if(time_count<10) temperature = 30;
+  else if(time_count> 10 ) temperature = 20;
+  else if(time_count > 20)  temperature = 15;
+  // Serial.print("Time : ");
+  // Serial.println(time_count);
   temperature = 30;
   humidity = read_humidity();
   display_action(temperature, humidity, water_refill, c);
   serial_print(temperature,humidity);
+
   if(c=='a'){ // 자동모드
     // Serial.println("automode 1");
     user_mode=0; //사용자 모드 비활성화 시킴
@@ -629,6 +639,7 @@ void loop() {
           break;
         case 'e': //워터펌프 on
           PORTB |= (1 << Waterpump_Output_PIN_1);
+          sound(WATERPUMP_ON);
           break;
         
         case 'f': //워터펌프 off
@@ -638,6 +649,7 @@ void loop() {
         case 'g': // 히팅 on
           heater_on();
           fan_on(50);
+          sound(HEATER_ON);
           break;
         
         case 'h': //히팅 off
@@ -648,6 +660,7 @@ void loop() {
         case 'i': //쿨링 on
           cooler_on();
           fan_on(200);
+          sound(COOLER_ON);
           break;
         
         case 'j': //쿨링 off
