@@ -2,29 +2,44 @@
 
 // SoftwareSerial 객체를 생성합니다.
 // RX_PIN과 TX_PIN을 실제 사용하고 있는 핀 번호로 바꿔야 합니다.
-SoftwareSerial btSerial(10, 11); // RX, TX
+SoftwareSerial btSerial(12, 13); // RX, TX
 
 //user_mode=0 -> 자동화모드 user_mode=1-> 사용자모드
-int user_mode=0; //처음에는 자동화모드로 설정
-char c='a'; //처음에는 자동화 모드 설정
+uint8_t user_mode=0; //처음에는 자동화모드로 설정
+char c='a';
+
+
+
 
 void setup(){
-
+   Serial.begin(9600);
+   btSerial.begin(9600);
+   Serial.println("Bluetooth Serial Test");
+   
 }
 
 void loop() {
 
+  
     if (btSerial.available()){  //블루투스로 문자 받아옴
-        c=btSerial.read();
+        char temp=btSerial.read();
+        if (temp == 'a' || temp == 'b' || temp == 'c' || temp == 'd' ||
+            temp == 'e' || temp == 'f' || temp == 'g' || temp == 'h' ||
+            temp == 'i' || temp == 'j')
+          c=temp;
+    }
 
-    if (user_mode==0 & c!='a')  //자동화모드에서 다른 문자가 선택되면 무시하기 위한 코드. 받아온 문자를 다시 a로 바꿔줌.
-        c='a';
+    Serial.print("바깥 Received: ");
+    Serial.print(user_mode); // user_mode 출력
+    Serial.println(c);
 
     if (c=='a')  //자동화모드가 선택된다면 원래 루프 함수 돌림
     {
-            user_mode=0; //사용자 모드 비활성화 시킴
+        user_mode=0; //사용자 모드 비활성화 시킴
 
-            //원래 루프 함수
+        //원래 루프 함수
+        Serial.print("Received: ");
+        Serial.println(c);
     }
 
     else //자동화모드 버튼 말고 다른 것이 눌렸을 때
@@ -37,38 +52,52 @@ void loop() {
             {
                 case 'c':
                     //환기팬 on하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'd':
                     //환기팬 off하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'e':
                     //워터펌프 on하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'f':
                     //워터펌프 off하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'g':
                     //히팅 on하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'h':
                     //히팅 off하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'i':
                     //쿨링 on하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
                 
                 case 'j':
                     //쿨링 off하는 코드 입력
+                    Serial.print("Received: ");
+                    Serial.println(c);
                     break;
             }
         }
     }
-    
-  }
 }
