@@ -39,14 +39,21 @@
 #define Waterlevel_Input_PIN 0 // 수위 읽어올 핀
 
 #define NUM_LEDS 3
-#define LED_Output_PIN_R 1
-#define LED_Output_PIN_G 0
+#define LED_Output_PIN_R 0
+#define LED_Output_PIN_G 1
 #define LED_Output_PIN_Y 2
 
-#define OC0A 0b01000000 //6번핀 사용 쿨러 회전을 위한 핀., PORTD의 6번 비트
+#define OC0A 0b01000000 //6번핀 사용 fan 회전을 위한 핀., PORTD의 6번 비트
 #define OC2B 0b00001000 //3번핀 사용 피에조 부조를 위한 핀. ,PORTD의 3번 비트
-#define Relay_controll 0b10000000 //릴레이 제어하는 핀.
+#define relay_heater 0b10000000 //릴레이 히터 제어하는 핀.
+#define relay_cooler 0b00000100 //릴레이 쿨러 제어하는 핀.
+#define cooler_fan 0b00010000 //쿨러 팬 제어하는 핀.
 
+
+#define COOLER_ON 0
+#define WATERPUMP_ON 1
+#define HEATER_ON 2
+#define WATER_REFILL 3
 
 
 //-------------------variables------------------------------------------
@@ -71,18 +78,18 @@ volatile int16_t user_operation = 0;
 volatile int32_t time_count = 0;
 
 const float frequencies[4][7] = {
-  {392.00, 392.00, 440.00, 440.00, 392.00, 392.00, 329.63}, // fan 킬 때, 솔 (G4) 솔 (G4) 라 (A4) 라 (A4) 솔 (G4) 솔 (G4) 미 (E4)
-  {0},
-  {0},
-  {0}
+  {392.00, 392.00, 440.00, 440.00, 392.00, 392.00, 329.63}, // 펠티어 쿨러 실행될 때, 솔 (G4) 솔 (G4) 라 (A4) 라 (A4) 솔 (G4) 솔 (G4) 미 (E4)
+  {261.63, 261.63, 329.63, 329.63, 392.00, 392.00, 523.25}, // 펌프 실행될 때, 도 (C4) 도 (C4), 미 (E4) 미 (E4), 솔 (G4) 솔 (G4), 도 (C5)
+  {392.00, 392.00, 349.23, 349.23, 329.63, 329.63, 293.66}, // 히터 실행될 때, 솔 (G4) 솔 (G4), 파 (F4) 파 (F4), 미 (E4) 미 (E4), 레 (D4)
+  {440.00, 440.00, 493.88, 493.88, 523.25, 523.25, 587.33}  // 물부족일 때, 라 (A4) 라 (A4), 시 (B4) 시 (B4), 도 (C5) 도 (C5), 레 (D5)
 };
 
-int8_t sound_select;
+// int8_t sound_select;
 uint8_t sound_state_flag[4]={0}; // 0이면 아예 실행할 필요 없는 상황, 1이면 최초 진입 후 한 사이클 실행중, 2이면 이미 한번 실행 완료했으니 더이상 신경 안쓰기
 // flag[0] : fan 실행됐을 때, flag[1] : ....
  
 int user_mode=0; //처음에는 자동화모드로 설정
-char c='a'; //처음에는 자동화 모드 설정
+char c='a'; // bluetooth로 받은 값, 처음에는 자동화 모드 설정
 
 
 //----------------------------------ISR-------------------------------------------------
@@ -174,9 +181,13 @@ void init_LED() {
 
 
 
-void relay_setup(){
-  DDRB|=Relay_controll; //릴레이 제어하는 핀-> 세라믹 히터 on//off
+void heater_setup(){
+  DDRB|=relay_heater; //릴레이 제어하는 핀-> 세라믹 히터 on
+}
 
+void cooler_setup(){
+  DDRD|=relay_cooler; //릴레이 제어하는 핀-> 펠티어 쿨러 on
+  DDRD|=cooler_fan; //펠티어 쿨러에 달려있는 fan on
 }
 
 void fan_setup(){//팬은 Counter 0 사용
@@ -335,8 +346,8 @@ void waterlevel_check() {
 
   temp_water_level = read_ADC(Waterlevel_Input_PIN);
 
-  Serial.print("waterlevel sensor value : ");
-  Serial.print(temp_water_level); 
+  // Serial.print("waterlevel sensor value : ");
+  // Serial.println(temp_water_level); 
   int16_t sum = 0;
 
   water_level[(water_index++) % 10] = temp_water_level;
@@ -345,8 +356,39 @@ void waterlevel_check() {
   }
   mean_water_level = sum / 10;
 
-  Serial.print(",  mean value : ");
-  Serial.println(mean_water_level);
+  if (mean_water_level < 200) { // 물 보충 필요할 때 : 모든 LED가 깜빡, water_refill 변수 true로
+    sound(WATER_REFILL);
+    if(time_count % 2 == 0){
+      PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
+    }
+    else{
+      PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
+    }
+    water_refill = true;
+
+    // PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
+    // delay(500);
+    // PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
+    // delay(500);
+
+    // else if 가 안돌아가는데 왜냐면 조금이라도 닿기만 하면 바로 1023이 나와서 그럼.....하 ...
+    // 그럼 1023일때만 세개 다 켜지고 애매한 값일때는 두개만 켜지도록 해보자
+  }
+  else if (mean_water_level>=200 && mean_water_level<600) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
+    PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
+    if(time_count % 2 == 0){
+      PORTB |= (1 << LED_Output_PIN_Y);
+    }
+    else{
+      PORTB &= ~(1 << LED_Output_PIN_Y);
+    }
+  }
+  else { // 정상 : 초록 LED만 들어옴.
+    PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
+    PORTB |= (1 << LED_Output_PIN_G);
+  }  
+  // Serial.print(",  mean value : ");
+  // Serial.println(mean_water_level);
   // // water_level = 300;
   // Serial.print("mean water_level : ");
   // Serial.println(meaa water_level);
@@ -361,37 +403,6 @@ void execute_waterpump(){
   // Serial.println(pumptime_num);
   if (pumptime_num >= 10) PORTB &= ~(1 << Waterpump_Output_PIN_1);
   else PORTB |= (1 << Waterpump_Output_PIN_1);
-
-  if (mean_water_level < 400) { // 물 보충 필요할 때 : 빨간색 LED가 깜빡, water_refill 변수 true로
-    if(time_count % 2 == 0){
-      PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
-    }else{
-      PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
-    }
-
-    water_refill = true;
-
-    // PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
-    // delay(500);
-    // PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
-    // delay(500);
-
-    // else if 가 안돌아가는데 왜냐면 조금이라도 닿기만 하면 바로 1023이 나와서 그럼.....하 ...
-    // 그럼 1023일때만 세개 다 켜지고 애매한 값일때는 두개만 켜지도록 해보자
-  }
-  else if (mean_water_level>=400 && mean_water_level<600) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
-    PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
-    // Serial.print("e");
-    if(time_count % 2 == 0){
-      PORTB |= (1 << LED_Output_PIN_Y);
-    }else{
-      PORTB &= ~(1 << LED_Output_PIN_Y);
-    }
-  }
-  else { // 정상 : 초록 LED만 들어옴.
-    PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
-    PORTB |= (1 << LED_Output_PIN_G);
-  }
 
 }
 
@@ -409,21 +420,41 @@ void serial_print(int8_t temperature, int8_t humidity){
 
 // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
 void sound(int8_t sound_select){
+
+  Serial.print("sound_select : ");
+  Serial.println(sound_select);
+
+  Serial.print("chaged to 0 : flag ");
+  bool other_sound_check = false;
+  for(int i=0; i<4; i++){
+    if(i != sound_select){
+      if(sound_state_flag[i] != 0)  other_sound_check = true;
+    }
+  }  
+  if (other_sound_check == true) return;
+
   for(int i=0; i<4; i++){
     if(i != sound_select){
       sound_state_flag[i] = 0;
+      Serial.print(i);
+      Serial.print(", ");
     }
   }
+      Serial.println("");
   if (sound_select == -1) return;
+  // Serial.print("Sound select right before ~ : ");
+  // Serial.println(sound_state_flag[sound_select]);
   if(sound_state_flag[sound_select] != 2) sound_state_flag[sound_select] = 1; // 이미 완료된 상태가 아니라면 (첫 진입이라면) flag 1로 설정
   if(sound_state_flag[0] == 1) sound_play(sound_select); // 아직 완료된 상태가 아니라면 소리 재생
   return;
 }
 
 
-void sound_play(uint8_t sound_slect){  // i번째 멜로디 출력
+void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
   static int freq_count=0;
   static uint8_t i = sound_select;
+
+  Serial.println("inside soudnplay 1");
 
   DDRD |= OC2B;  // OC2B (PORTD의 3번비트) output모드로
 
@@ -445,6 +476,10 @@ void sound_play(uint8_t sound_slect){  // i번째 멜로디 출력
     //     asm("nop");
     //   }
     // }
+    Serial.print("freq_count, flag[i] : ");
+    Serial.print(freq_count);
+    Serial.print(", ");
+    Serial.println(sound_state_flag[i]);
     freq_count += 1;
   }
   else if (freq_count >= 7)
@@ -452,13 +487,55 @@ void sound_play(uint8_t sound_slect){  // i번째 멜로디 출력
     PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
     // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
     TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
-
+    Serial.print("freq_count, flag[i] : ");
+    Serial.print(freq_count);
+    Serial.print(", ");
+    Serial.println(sound_state_flag[i]);
     freq_count = 0;   // 음계 index 초기화
     sound_state_flag[i] = 2; // 재생 완료했다고 flag 설정
+    Serial.print("After flag change : flag");
+    Serial.println(sound_state_flag[i]);
   }
 }
 
+void fan_on(int8_t target){
+  PORTD |= OC0A;  // OC0A(PORTD의 6번비트)출력 주기
+  TCCR0A |= (1<<COM0A1); // TIMER0 켜기
+  OCR0A = target;
+}
 
+void fan_off(){
+  TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+  PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+}
+
+void heater_on(){
+  PORTB |= relay_heater;    // 릴레이 히터 켜기
+}
+
+void heater_off(){
+  PORTB &= ~relay_heater;    // 릴레이 히터 끄기
+}
+
+void cooler_on(){
+  PORTD |= relay_cooler;    // 릴레이 쿨러 켜기
+  PORTD |= cooler_fan;    // 쿨러에 있는 fan 켜기
+}
+
+void cooler_off(){
+  PORTD &= ~relay_cooler;    // 릴레이 쿨러 켜기
+  PORTD &= ~cooler_fan;    // 쿨러에 있는 fan 켜기
+}
+
+// char bluetooth_input(){
+//   if (btSerial.available()){  //블루투스로 모드, 동작 제어 받기 위한 값 받아옴
+//     char temp=btSerial.read();
+//     if (temp == 'a' || temp == 'b' || temp == 'c' || temp == 'd' ||
+//         temp == 'e' || temp == 'f' || temp == 'g' || temp == 'h' ||
+//         temp == 'i' || temp == 'j')
+//     return temp;
+//   }  
+// }
 
 //-------------------------MAIN FUNCTION--------------------------------------
 
@@ -473,104 +550,110 @@ void setup() {
   dht.begin();
   pump_setup();
   init_LED();
-  relay_setup();
+  heater_setup();
   fan_setup();
   buzzer_setup();
 }
 
 
 void loop() {
-  //블루투스로 문자 받아옴
-  if (btSerial.available()) c=btSerial.read();
-  //자동화모드에서 다른 문자가 선택되면 무시하기 위한 코드. 받아온 문자를 다시 a로 바꿔줌.
-  if (user_mode==0 & c!='a') c='a';
+  // Serial.println("point1");
 
-  temperature = read_temperature_digital();  
+  if (btSerial.available()){  //블루투스로 문자 받아옴
+      char temp=btSerial.read();
+      if (temp == 'a' || temp == 'b' || temp == 'c' || temp == 'd' ||
+          temp == 'e' || temp == 'f' || temp == 'g' || temp == 'h' ||
+          temp == 'i' || temp == 'j')
+        c=temp;
+  }
+
+  // 온습도 읽기 및 LCD 출력
+  // temperature = read_temperature_digital();
+  temperature = 30;
   humidity = read_humidity();
   display_action(temperature, humidity, water_refill, c);
-
+  serial_print(temperature,humidity);
   if(c=='a'){ // 자동모드
-    // serial_print(temperature, humidity);  
+    // Serial.println("automode 1");
     user_mode=0; //사용자 모드 비활성화 시킴
 
-    waterlevel_check();
-    execute_waterpump();
+    waterlevel_check(); // 수위 체크
+    execute_waterpump(); // 정해진 시간마다 워터펌프 실행
 
     if(temperature <= 18){  //18도 이하일때
-      // Serial.println("temp under 18 entered");
-      sound_select = 0; // fan 실행시 발생하는 멜로디 : 0번 멜로디
-      sound(sound_select); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
-      
-      // 팬 끄기
-      TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
-      PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+
+      heater_on();      // 히터 켜기
+      sound(HEATER_ON); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
+      fan_on(50);      //팬 약하게 틀기(OCR2A 50)
+
+      cooler_off();
     }
     else if(temperature>18 & temperature<23){  // 정상 온도일때
-      sound_select = -1; // fan 실행시 발생하는 멜로디 : 0번 멜로디
-      sound(sound_select); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
 
-      Serial.println("inside if 18 23");
-
-      // 팬 끄기
-      TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
-      PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+      sound(-1); // 다른 멜로디들은 다 끄기
+      heater_off(); // 히터 끄기
+      fan_off();  // 팬 끄기
+      cooler_off(); // 쿨러 끄기
+      
   
     }
     else{  // 23도 이상일때
-      PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
 
-      //팬 켜기
-      PORTD |= OC0A;  // OC0A(PORTD의 6번비트)출력 주기
-      TCCR0A|=(1<<COM0A1); // TIMER0 켜기
+      cooler_on();
+      fan_on(250);  //팬 켜기(OCR2A 200)
+      sound(COOLER_ON); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제      
 
-      sound_select = 0; // fan 실행시 발생하는 멜로디 : 0번 멜로디
-      sound(sound_select); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
-
-      // PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
-      // // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
-      // TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
-      
+      heater_off(); // 히터 끄기
     }    
   }
     else //자동화모드 버튼 말고 다른 것이 눌렸을 때
   {   
     //사용자모드 버튼이 눌렸다면 user_mode가 1이 되게 하여, 사용자모드 활성화
+      Serial.println("usermode 1");
+ 
     if (c=='b') user_mode=1;
     if (user_mode==1) //사용자모드로 선택되어 있다면, 환기 워터펌프 히팅 쿨링 관련 버튼 눌렀을 때 활성화.
     {
-    switch (c)
-    {
-      case 'c':
-        //환기팬 on하는 코드 입력
-        break;
-      
-      case 'd':
-        //환기팬 off하는 코드 입력
-        break;
-      
-      case 'e':
-        //워터펌프 on하는 코드 입력
-        break;
-      
-      case 'f':
-        //워터펌프 off하는 코드 입력
-        break;
-      
-      case 'g':
-        //히팅 on하는 코드 입력
-        break;
-      
-      case 'h':
-        //히팅 off하는 코드 입력
-        break;
-      
-      case 'i':
-        //쿨링 on하는 코드 입력
-        break;
-      
-      case 'j':
-        //쿨링 off하는 코드 입력
-        break;
+      heater_off();
+      cooler_off();
+      fan_off();
+
+      switch (c)
+      {
+        case 'c': //환기팬 on
+          fan_on(200);
+          break;
+        
+        case 'd': // 환기팬 off
+          fan_off();
+          break;
+        case 'e': //워터펌프 on
+          PORTB |= (1 << Waterpump_Output_PIN_1);
+          break;
+        
+        case 'f': //워터펌프 off
+          PORTB &= ~(1 << Waterpump_Output_PIN_1);
+          break;
+        
+        case 'g': // 히팅 on
+          heater_on();
+          fan_on(50);
+          break;
+        
+        case 'h': //히팅 off
+          heater_off();
+          fan_off();
+          break;
+        
+        case 'i': //쿨링 on
+          cooler_on();
+          fan_on(200);
+          break;
+        
+        case 'j': //쿨링 off
+          cooler_off();
+          fan_off();
+          break;
       }
     }
   }
