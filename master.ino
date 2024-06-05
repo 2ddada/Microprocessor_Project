@@ -46,7 +46,7 @@
 #define OC0A 0b01000000 //6번핀 사용 fan 회전을 위한 핀., PORTD의 6번 비트
 #define OC2B 0b00001000 //3번핀 사용 피에조 부조를 위한 핀. ,PORTD의 3번 비트
 #define relay_heater 0b10000000 //릴레이 히터 제어하는 핀.
-#define relay_cooler 0b00000100 //릴레이 쿨러 제어하는 핀.
+#define relay_cooler 0b00000010 //릴레이 쿨러 제어하는 핀.
 #define cooler_fan 0b00010000 //쿨러 팬 제어하는 핀.
 
 
