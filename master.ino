@@ -18,7 +18,7 @@
 
 
 //---------------------------header files---------------------
-
+#include <SoftwareSerial.h> // 블루투스 통
 #include <Wire.h>                     // i2C 통신을 위한 라이브러리
 #include <LiquidCrystal_I2C.h>        // LCD 2004 I2C용 라이브러리
 #include "DHT.h"                     // DHT 센서 라이브러리
@@ -52,6 +52,7 @@
 //-------------------variables------------------------------------------
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);   // 접근주소: 0x3F or 0x27
+SoftwareSerial btSerial(12, 13); // RX: 12, TX: 13 번 핀
 DHT dht(DHTPIN, DHTTYPE);
 
 int16_t temperature, humidity, mean_water_level, temp_water_level;
@@ -63,81 +64,32 @@ int16_t water_level[10];
 bool water_refill;
 
 
+bool usermode = false;
+volatile int16_t user_operation = 0;
+
+
 volatile int32_t time_count = 0;
 
-const float frequencies[7] = { 
-  392.00, // 솔 (G4)
-  392.00, // 솔 (G4)
-  440.00, // 라 (A4)
-  440.00, // 라 (A4)
-  392.00, // 솔 (G4)
-  392.00, // 솔 (G4)
-  329.63, // 미 (E4)
+const float frequencies[4][7] = {
+  {392.00, 392.00, 440.00, 440.00, 392.00, 392.00, 329.63}, // fan 킬 때, 솔 (G4) 솔 (G4) 라 (A4) 라 (A4) 솔 (G4) 솔 (G4) 미 (E4)
+  {0},
+  {0},
+  {0}
 };
 
-uint8_t sound_state_flag=0; // 0이면 아예 실행할 필요 없는 상황, 1이면 최초 진입 후 한 사이클 실행중, 2이면 이미 한번 실행 완료했으니 더이상 신경 안쓰기
+int8_t sound_select;
+uint8_t sound_state_flag[4]={0}; // 0이면 아예 실행할 필요 없는 상황, 1이면 최초 진입 후 한 사이클 실행중, 2이면 이미 한번 실행 완료했으니 더이상 신경 안쓰기
+// flag[0] : fan 실행됐을 때, flag[1] : ....
+ 
+int user_mode=0; //처음에는 자동화모드로 설정
+char c='a'; //처음에는 자동화 모드 설정
 
 
 //----------------------------------ISR-------------------------------------------------
 
 ISR(TIMER1_COMPA_vect) {
-  // 펌프 작동하는 주기 관리
+  // 1초에 1씩 count
   time_count++;
-  // Serial.print("num check : ");
-  // Serial.println(num);
-  // Serial.print("Debugging : TIMER1_COMPA ISR(1초씩 세는거)) execution times : ");
-  // Serial.println(num);
-  // 5초동안 펌프를 켜기. 작동 시간 바꾸고 싶으면 아래 숫자만 바꿔주면 끝.
-  
-  // if (num > 10 && num <= 15) {
-  //   PORTB &= ~(1 << Waterpump_Output_PIN_1);
-  //   if (num == 15) {
-  //     num = 0;
-  //   }
-  // } else {
-  //   PORTB |= (1 << Waterpump_Output_PIN_1);
-  // }
-
-  // Serial.print("waterpump check : ");
-  // Serial.println(PORTB & (1 << Waterpump_Output_PIN_1));
-}
-
-ISR(TIMER0_COMPA_vect)
-{ // 버저에서 나는 소리 조절
-  // static int debuggingnum = 0;
-  // debuggingnum++;
-
-  // if (debuggingnum%100 == 0){
-  //   Serial.print("Debugging : TIMER0_COMPA ISR (팬 쓰는거) execution times : ");
-  //    Serial.println(debuggingnum);
-  // }
-
-  // if (flag == 1 && freq_count >= 0 && freq_count < 7)
-  // {
-  //   freq_count+=1;
-  
-  //   float freq_target=frequencies[freq_count];
-  
-  //   OCR2A=F_CPU/256/freq_target-1;
-  
-  //   OCR2B=OCR2A/10000;
-
-  //   Serial.println("Debugging : nop executed ");
-
-  //   for (uint16_t j=0;j<50;j++)
-  //   {
-  //     for (uint16_t i=0;i<64000;i++)
-  //     {
-  //       asm("nop");
-  //     }
-  //   }
-  // }
-  // else // 마지막 소리가 종료되면
-  // {
-  //   flag = 0; // 플래그 설정하여 더 이상 ISR이 소리를 재생하지 않도록 함
-  //   freq_count = -1;
-  //   TIMSK2 &= ~(1<<OCIE2A);
-  // }
 }
 
 //------------------------------setup functions----------------------------------------------------
@@ -263,36 +215,64 @@ void buzzer_setup(){
 }
 //-----------------------action------------------------------------------------
 
-void display_action(int8_t temperature, int8_t humidity, bool water_refill)
+void display_action(int8_t temperature, int8_t humidity, bool water_refill, char c)
 {
   lcd.clear();
 
   lcd.setCursor(0, 0);             // 첫번째 줄 문자열 출력
-  // lcd.print("                      "); // 비우기     
-  // lcd.setCursor(0, 0);
   lcd.print("Temperature : ");
   lcd.print(temperature);
   lcd.print("oC");
 
  
   lcd.setCursor(0, 1);             // 두번째 줄 문자열 출력
-  // lcd.print("                       "); // 비우기     
-  // lcd.setCursor(0, 1);
   lcd.print("Humidity : ");
   lcd.print(humidity);
   lcd.print("%");
   
  
   lcd.setCursor(0, 2);             // 세번째 줄 문자열 출력
-  // lcd.print("                              "); // 비우기     
-  // lcd.setCursor(0, 2);
-  lcd.print("Hello World!!");
+  lcd.print("Current mode : ");
+  lcd.print(usermode ? "Usermode" : "Automode");
+
   
   lcd.setCursor(0, 3);             // 네번째 줄 문자열 출력
-  // lcd.print("                              "); // 비우기     
-  // lcd.setCursor(0, 3);
-  lcd.print("Water Refill : ");
-  lcd.print(water_refill ? "Yes" : "No");
+  if(c == 'a'){ // 자동모드일 경우 물 보충 여부 출력
+    lcd.print("Water Refill : ");
+    lcd.print(water_refill ? "Yes" : "No");
+  }
+  else{ // 자동모드면 물 보충여부 출력  
+    lcd.print("Operating : ");
+    switch(c){
+      case 'c':
+        lcd.print("Fan ON");
+        break;
+      case 'd':
+        lcd.print("Fan OFF");
+        break;
+      case 'e':
+        lcd.print("Waterpump ON");
+        break;
+      case 'f':
+        lcd.print("Waterpump OFF");
+        break;
+      case 'g':
+        lcd.print("Heating ON");
+        break;
+      case 'h':
+        lcd.print("Heating OFF");
+        break;
+      case 'i':
+        lcd.print("Cooling ON");
+        break;
+      case 'j':
+        lcd.print("Cooling OFF");
+        break;
+      default: 
+        lcd.print("invalid operation");
+        break;
+    }
+  }
 }
 
 
@@ -427,28 +407,44 @@ void serial_print(int8_t temperature, int8_t humidity){
   // delay(1000);
 }
 
-void sound_play(){
+// 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
+void sound(int8_t sound_select){
+  for(int i=0; i<4; i++){
+    if(i != sound_select){
+      sound_state_flag[i] = 0;
+    }
+  }
+  if (sound_select == -1) return;
+  if(sound_state_flag[sound_select] != 2) sound_state_flag[sound_select] = 1; // 이미 완료된 상태가 아니라면 (첫 진입이라면) flag 1로 설정
+  if(sound_state_flag[0] == 1) sound_play(sound_select); // 아직 완료된 상태가 아니라면 소리 재생
+  return;
+}
+
+
+void sound_play(uint8_t sound_slect){  // i번째 멜로디 출력
   static int freq_count=0;
+  static uint8_t i = sound_select;
+
   DDRD |= OC2B;  // OC2B (PORTD의 3번비트) output모드로
 
   if (freq_count >= 0 && freq_count < 7)
   {
     PORTD |= OC2B;  // OC2B (PORTD의 3번비트) 출력 주기
     TCCR2A|=(1<<COM2B1); // TIMER2 켜기
-    float freq_target = frequencies[freq_count];
+    float freq_target = frequencies[i][freq_count];
 
     OCR2A = F_CPU / 256 / freq_target - 1; // 목표 freq에 맞는 출력 나오게 OCR2A 설정
     OCR2B = OCR2A / 100; // 실제 출력할 것의 duty cycle 설정
 
     // Serial.println("Debugging : nop executed ");
 
-    for (uint16_t j = 0; j < 50; j++)
-    {
-      for (uint16_t i = 0; i < 64000; i++)
-      {
-        asm("nop");
-      }
-    }
+    // for (uint16_t j = 0; j < 50; j++)
+    // {
+    //   for (uint16_t i = 0; i < 32000; i++)
+    //   {
+    //     asm("nop");
+    //   }
+    // }
     freq_count += 1;
   }
   else if (freq_count >= 7)
@@ -458,7 +454,7 @@ void sound_play(){
     TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
 
     freq_count = 0;   // 음계 index 초기화
-    sound_state_flag = 2; // 재생 완료했다고 flag 설정
+    sound_state_flag[i] = 2; // 재생 완료했다고 flag 설정
   }
 }
 
@@ -484,49 +480,99 @@ void setup() {
 
 
 void loop() {
+  //블루투스로 문자 받아옴
+  if (btSerial.available()) c=btSerial.read();
+  //자동화모드에서 다른 문자가 선택되면 무시하기 위한 코드. 받아온 문자를 다시 a로 바꿔줌.
+  if (user_mode==0 & c!='a') c='a';
 
   temperature = read_temperature_digital();  
   humidity = read_humidity();
-  display_action(temperature, humidity, water_refill);
-  // serial_print(temperature, humidity);  
+  display_action(temperature, humidity, water_refill, c);
 
-  waterlevel_check();
-  execute_waterpump();
+  if(c=='a'){ // 자동모드
+    // serial_print(temperature, humidity);  
+    user_mode=0; //사용자 모드 비활성화 시킴
 
-  if(temperature <= 18){  //18도 이하일때
-    // Serial.println("temp under 18 entered");
-    sound_state_flag = 0;
-    PORTB|=Relay_controll;    //릴레이 on->세라믹 히터 on
-    
-    // 팬 끄기
-    TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
-    PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+    waterlevel_check();
+    execute_waterpump();
+
+    if(temperature <= 18){  //18도 이하일때
+      // Serial.println("temp under 18 entered");
+      sound_select = 0; // fan 실행시 발생하는 멜로디 : 0번 멜로디
+      sound(sound_select); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
+      
+      // 팬 끄기
+      TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+      PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+    }
+    else if(temperature>18 & temperature<23){  // 정상 온도일때
+      sound_select = -1; // fan 실행시 발생하는 멜로디 : 0번 멜로디
+      sound(sound_select); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
+
+      Serial.println("inside if 18 23");
+
+      // 팬 끄기
+      TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+      PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
+  
+    }
+    else{  // 23도 이상일때
+      PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
+
+      //팬 켜기
+      PORTD |= OC0A;  // OC0A(PORTD의 6번비트)출력 주기
+      TCCR0A|=(1<<COM0A1); // TIMER0 켜기
+
+      sound_select = 0; // fan 실행시 발생하는 멜로디 : 0번 멜로디
+      sound(sound_select); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
+
+      // PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
+      // // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
+      // TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
+      
+    }    
   }
-  else if(temperature>18 & temperature<23){  // 정상 온도일때
-    sound_state_flag = 0;
-    PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
-
-    Serial.println("inside if 18 23");
-
-    // 팬 끄기
-    TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
-    PORTD &= ~OC0A;  // OC0A(PORTD의 6번비트) 출력 끄기
- 
-  }
-  else{  // 23도 이상일때
-    PORTB &= ~Relay_controll;    // 릴레이 끄기 (히터 끄기)
-
-    //팬 켜기
-    PORTD |= OC0A;  // OC0A(PORTD의 6번비트)출력 주기
-    TCCR0A|=(1<<COM0A1); // TIMER0 켜기
-
-    if(sound_state_flag != 2) sound_state_flag = 1; // 이미 완료된 상태가 아니라면 (첫 진입이라면) flag 1로 설정
-    if(sound_state_flag == 1) sound_play(); // 아직 완료된 상태가 아니라면 소리 재생
-
-    // PORTD &= ~OC2B;  // OC2B (PORTD의 3번비트) 출력 끄기
-    // // 타이머 2 를 비활성화 (TCCR2A의 COM2B 핀만 00 -> noraml port operation, OC0A disconnected)
-    // TCCR2A &= ~((1 << COM2B1) | (1 << COM2B0));
-    
+    else //자동화모드 버튼 말고 다른 것이 눌렸을 때
+  {   
+    //사용자모드 버튼이 눌렸다면 user_mode가 1이 되게 하여, 사용자모드 활성화
+    if (c=='b') user_mode=1;
+    if (user_mode==1) //사용자모드로 선택되어 있다면, 환기 워터펌프 히팅 쿨링 관련 버튼 눌렀을 때 활성화.
+    {
+    switch (c)
+    {
+      case 'c':
+        //환기팬 on하는 코드 입력
+        break;
+      
+      case 'd':
+        //환기팬 off하는 코드 입력
+        break;
+      
+      case 'e':
+        //워터펌프 on하는 코드 입력
+        break;
+      
+      case 'f':
+        //워터펌프 off하는 코드 입력
+        break;
+      
+      case 'g':
+        //히팅 on하는 코드 입력
+        break;
+      
+      case 'h':
+        //히팅 off하는 코드 입력
+        break;
+      
+      case 'i':
+        //쿨링 on하는 코드 입력
+        break;
+      
+      case 'j':
+        //쿨링 off하는 코드 입력
+        break;
+      }
+    }
   }
   delay(1000); // 1초마다 업데이트
 }
