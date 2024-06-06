@@ -46,8 +46,9 @@
 #define OC0A 0b01000000 //6번핀 사용 fan 회전을 위한 핀., PORTD의 6번 비트
 #define OC2B 0b00001000 //3번핀 사용 피에조 부조를 위한 핀. ,PORTD의 3번 비트
 #define relay_heater 0b10000000 //릴레이 히터 제어하는 핀.
-#define relay_cooler 0b00000010 //릴레이 쿨러 제어하는 핀.
-#define cooler_fan 0b00010000 //쿨러 팬 제어하는 핀.
+#define relay_cooler 0b00000100 //릴레이 쿨러 제어하는 핀.
+#define cooler_fan_1 0b00010000 //쿨러 팬 제어하는 핀.
+#define cooler_fan_2 0b00000010 //쿨러 팬 제어하는 핀.
 
 
 #define COOLER_ON 0
@@ -186,8 +187,10 @@ void heater_setup(){
 }
 
 void cooler_setup(){
-  DDRD|=relay_cooler; //릴레이 제어하는 핀-> 펠티어 쿨러 on
-  DDRD|=cooler_fan; //펠티어 쿨러에 달려있는 fan on
+  DDRC|=relay_cooler; //릴레이 제어하는 핀-> 펠티어 쿨러 on
+  DDRD|=cooler_fan_1; //펠티어 쿨러에 달려있는 fan 1 on
+  DDRC|=cooler_fan_2; //펠티어 쿨러에 달려있는 fan 2 on
+
 }
 
 void fan_setup(){//팬은 Counter 0 사용
@@ -244,7 +247,7 @@ void display_action(int8_t temperature, int8_t humidity, bool water_refill, char
  
   lcd.setCursor(0, 2);             // 세번째 줄 문자열 출력
   lcd.print("Current mode : ");
-  lcd.print(c == 'a' | 'b' ? "User" : "Auto");
+  lcd.print(c == 'a' | 'b' ? "Auto" : "User");
 
   
   lcd.setCursor(0, 3);             // 네번째 줄 문자열 출력
@@ -359,7 +362,7 @@ void waterlevel_check() {
   }
   mean_water_level = sum / 10;
 
-  if (mean_water_level < 200) { // 물 보충 필요할 때 : 모든 LED가 깜빡, water_refill 변수 true로
+  if (mean_water_level < 550) { // 물 보충 필요할 때 : 모든 LED가 깜빡, water_refill 변수 true로
     sound(WATER_REFILL);
     if(time_count % 2 == 0){
       PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
@@ -368,16 +371,8 @@ void waterlevel_check() {
       PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
     }
     water_refill = true;
-
-    // PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
-    // delay(500);
-    // PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
-    // delay(500);
-
-    // else if 가 안돌아가는데 왜냐면 조금이라도 닿기만 하면 바로 1023이 나와서 그럼.....하 ...
-    // 그럼 1023일때만 세개 다 켜지고 애매한 값일때는 두개만 켜지도록 해보자
   }
-  else if (mean_water_level>=200 && mean_water_level<600) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
+  else if (mean_water_level>=550 && mean_water_level<580) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
     PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
     if(time_count % 2 == 0){
       PORTB |= (1 << LED_Output_PIN_Y);
@@ -391,19 +386,18 @@ void waterlevel_check() {
     PORTB |= (1 << LED_Output_PIN_G);
   }  
   // Serial.print(",  mean value : ");
-  // Serial.println(mean_water_level);
-  // // water_level = 300;
+  // // Serial.println(mean_water_level);
   // Serial.print("mean water_level : ");
-  // Serial.println(meaa water_level);
+  // Serial.println(mean_water_level);
 }
 
 void execute_waterpump(){
   // 펌프 실행
   pumptime_num = time_count % 15;
-  Serial.print("time_count : ");
-  Serial.println(time_count);
-  Serial.print("pumptime_num : ");
-  Serial.println(pumptime_num);
+  // Serial.print("time_count : ");
+  // Serial.println(time_count);
+  // Serial.print("pumptime_num : ");
+  // Serial.println(pumptime_num);
   if (pumptime_num >= 10) PORTB |= (1 << Waterpump_Output_PIN_1);
   else PORTB &= ~(1 << Waterpump_Output_PIN_1);
 
@@ -418,6 +412,8 @@ void serial_print(int8_t temperature, int8_t humidity){
   Serial.print("Humidity: ");
   Serial.print(humidity);
   Serial.println("%");
+  Serial.print("Current time : ");
+  Serial.println(time_count);
   // delay(1000);
 }
 
@@ -428,13 +424,13 @@ void sound(int8_t sound_select){
   // Serial.println(sound_select);
 
   // Serial.print("chaged to 0 : flag ");
-  bool other_sound_check = false;
-  for(int i=0; i< sound_select ; i++){
+  bool other_sound_check = false; // 서로 다른 두 멜로디가 동시에 출력을 요청할 때를 다루기 위한 변수
+  for(int i=0; i< sound_select ; i++){ // 서로 다른 두 멜로디가 동시에 sound_state_flag에 접근하는 race condition 방지 위해 sound_select까지만 i를 증가 -> 무조건 index 작은 멜로디가 우선순위를 가지도록...
     if(i != sound_select){
       if(sound_state_flag[i] != 0)  other_sound_check = true;
     }
   }  
-  if (other_sound_check == true) return;
+  if (other_sound_check == true) return; // 자신보다 앞선 index에서 출력 flag를 가진다면 자신은 exit
 
   for(int i=0; i<4; i++){
     if(i != sound_select){
@@ -468,7 +464,7 @@ void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
     float freq_target = frequencies[i][freq_count];
 
     OCR2A = F_CPU / 256 / freq_target - 1; // 목표 freq에 맞는 출력 나오게 OCR2A 설정
-    OCR2B = OCR2A / 100; // 실제 출력할 것의 duty cycle 설정
+    OCR2B = OCR2A / 10; // 실제 출력할 것의 duty cycle 설정
 
     // Serial.println("Debugging : nop executed ");
 
@@ -521,13 +517,17 @@ void heater_off(){
 }
 
 void cooler_on(){
-  PORTD |= relay_cooler;    // 릴레이 쿨러 켜기
-  PORTD |= cooler_fan;    // 쿨러에 있는 fan 켜기
+  PORTC |= relay_cooler;    // 릴레이 쿨러 켜기
+  PORTD |= cooler_fan_1;    // 쿨러에 있는 fan 1 켜기
+  PORTC |= cooler_fan_2;    // 쿨러에 있는 fan 2 켜기
+
 }
 
 void cooler_off(){
-  PORTD &= ~relay_cooler;    // 릴레이 쿨러 켜기
-  PORTD &= ~cooler_fan;    // 쿨러에 있는 fan 켜기
+  PORTC &= ~relay_cooler;    // 릴레이 쿨러 끄기
+  PORTD &= ~cooler_fan_1;    // 쿨러에 있는 fan 1 끄기
+  PORTC &= ~cooler_fan_2;    // 쿨러에 있는 fan 2 끄기
+
 }
 
 // char bluetooth_input(){
@@ -554,6 +554,7 @@ void setup() {
   pump_setup();
   init_LED();
   heater_setup();
+  cooler_setup();
   fan_setup();
   buzzer_setup();
 }
@@ -571,14 +572,14 @@ void loop() {
   }
 
   // 온습도 읽기 및 LCD 출력
-  // temperature = read_temperature_digital();
+  temperature = read_temperature_digital();
 
-  if(time_count<10) temperature = 30;
-  else if(time_count> 10 ) temperature = 20;
-  else if(time_count > 20)  temperature = 15;
-  // Serial.print("Time : ");
-  // Serial.println(time_count);
-  temperature = 30;
+  // if(time_count<10) temperature = 30;
+  // else if(time_count> 10 ) temperature = 20;
+  // else if(time_count > 20)  temperature = 15;
+  // // Serial.print("Time : ");
+  // // Serial.println(time_count);
+  // temperature = 20;
   humidity = read_humidity();
   display_action(temperature, humidity, water_refill, c);
   serial_print(temperature,humidity);
@@ -610,7 +611,7 @@ void loop() {
     else{  // 23도 이상일때
 
       cooler_on();
-      fan_on(250);  //팬 켜기(OCR2A 200)
+      fan_on(255);  //팬 켜기(OCR2A 200)
       sound(COOLER_ON); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제      
 
       heater_off(); // 히터 끄기
@@ -670,7 +671,7 @@ void loop() {
       }
     }
   }
-  delay(1000); // 1초마다 업데이트
+  delay(500); // 1초마다 업데이트
 }
 
 
