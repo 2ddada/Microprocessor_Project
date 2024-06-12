@@ -381,9 +381,9 @@ void execute_waterpump(){
   // Serial.println(time_count);
   // Serial.print("pumptime_num : ");
   // Serial.println(pumptime_num);
-  // if (pumptime_num >= 10) PORTB |= (1 << Waterpump_Output_PIN_1);
-  // else PORTB &= ~(1 << Waterpump_Output_PIN_1);
-  PORTB |= (1 << Waterpump_Output_PIN_1);
+  if (pumptime_num >= 10) PORTB |= (1 << Waterpump_Output_PIN_1);
+  else PORTB &= ~(1 << Waterpump_Output_PIN_1);
+  // PORTB |= (1 << Waterpump_Output_PIN_1);
 }
 
 
@@ -474,7 +474,7 @@ void fan_on(int8_t target){
 
 void fan_off(){
   // TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
-  PORTD &= ~( 1 << 0b01000000);  // OC0A(PORTD의 6번비트) 출력 끄기
+  PORTD &= ~0b01000000;  // OC0A(PORTD의 6번비트) 출력 끄기
 }
 
 void heater_on(){
@@ -544,11 +544,12 @@ void loop() {
 
   // 온습도 읽기 및 LCD 출력
 
-  // temperature = read_temperature_digital();
+  temperature = read_temperature_digital();
   // temperature = 20;
-  if(time_count<10) temperature = 26;
-  if(time_count>10 && time_count<15) temperature = 20;
-  if(time_count>20) temperature = 26;
+  // if(time_count<10) temperature = 26;
+  // if(time_count>10 && time_count<15) temperature = 20;
+  // if(time_count>20) temperature = 26;
+  // if(time_count>30) temperature = 20;
 
   humidity = read_humidity();
   Serial.print("temperatrue : ");
