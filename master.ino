@@ -249,8 +249,8 @@ void display_action(int8_t temperature, int8_t humidity, bool water_refill, char
  
   lcd.setCursor(0, 2);             // 세번째 줄 문자열 출력
   lcd.print("Current mode : ");
-  lcd.print(c == 'a' | 'b' ? "Auto" : "User");
-
+  if(c == 'a') lcd.print("Auto");
+  else lcd.print("User");
   
   lcd.setCursor(0, 3);             // 네번째 줄 문자열 출력
   if(c == 'a'){ // 자동모드일 경우 물 보충 여부 출력
@@ -313,14 +313,10 @@ int16_t read_ADC(uint8_t pin) {
 // busywait함수를 loop함수에 직접적으로 넣어야하나 아니면 개별 함수마다 넣어야하나?
 // 나중에 interrupt 구현하면 상관없을거같긴 한데 일단은 개별 함수마다 구현해야겠다
 int16_t read_temperature(){
-
   uint16_t temp_temperature = read_ADC(Temperature_Input_PIN);
-
-
   // 이다음에 실제 온도값으로 변경
   // 계산과정에서 정수말고 실수로 될 수 도 있으니 float하고
   // datasheet 분석하면 T = 100Vout
-
   temperature = (float)temp_temperature * 5.0 / 1024.0 * 100.0;
   return temperature;
 }
@@ -339,23 +335,19 @@ int pumptime_num;
 
 void waterlevel_check() {
 
-  // ADCSRA |= (1 << ADSC);
-  // while (ADCSRA & (1 << ADSC));
-  // uint16_t value = ADC;
-
   temp_water_level = read_ADC(Waterlevel_Input_PIN);
 
-  // Serial.print("waterlevel sensor value : ");
-  // Serial.println(temp_water_level); 
+  Serial.print("waterlevel sensor value : ");
+  Serial.println(temp_water_level); 
   int16_t sum = 0;
 
-  water_level[(water_index++) % 10] = temp_water_level;
-  for(int i=0 ; i<10; i++){
+  water_level[(water_index++) % 3] = temp_water_level;
+  for(int i=0 ; i<3; i++){
     sum += water_level[i];
   }
-  mean_water_level = sum / 10;
+  mean_water_level = sum / 3;
   // Serial.println(mean_water_level);
-  if (mean_water_level < 550) { // 물 보충 필요할 때 : 모든 LED가 깜빡, water_refill 변수 true로
+  if (temp_water_level < 410) { // 물 보충 필요할 때 : 모든 LED가 깜빡, water_refill 변수 true로
     sound(WATER_REFILL);
     if(time_count % 2 == 0){
       PORTB |= (1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G);
@@ -365,7 +357,7 @@ void waterlevel_check() {
     }
     water_refill = true;
   }
-  else if (mean_water_level>=550 && mean_water_level<580) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
+  else if (temp_water_level>=410 && temp_water_level<470) { // 물 살짝 부족할 때 : 노란색 LED가 깜빡
     PORTB &= ~((1 << LED_Output_PIN_R) | (1 << LED_Output_PIN_Y) | (1 << LED_Output_PIN_G));
     if(time_count % 2 == 0){
       PORTB |= (1 << LED_Output_PIN_Y);
@@ -380,10 +372,6 @@ void waterlevel_check() {
     PORTB |= (1 << LED_Output_PIN_G);
     water_refill = false;
   }  
-  // Serial.print(",  mean value : ");
-  // // Serial.println(mean_water_level);
-  // Serial.print("mean water_level : ");
-  // Serial.println(mean_water_level);
 }
 
 void execute_waterpump(){
@@ -479,14 +467,14 @@ void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
 
 void fan_on(int8_t target){
   // Serial.println("inside fan_on()");
-  PORTD |= OC0A;  // OC0A(PORTD의 6번비트)출력 주기
-  TCCR0A |= (1<<COM0A1); // TIMER0 켜기
-  OCR0A = target;
+  PORTD |= 0b01000000;  // OC0A(PORTD의 6번비트)출력 주기
+  // TCCR0A |= (1<<COM0A1); // TIMER0 켜기
+  // OCR0A = target;
 }
 
 void fan_off(){
-  TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
-  PORTD &= ~( 1 << OC0A);  // OC0A(PORTD의 6번비트) 출력 끄기
+  // TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+  PORTD &= ~( 1 << 0b01000000);  // OC0A(PORTD의 6번비트) 출력 끄기
 }
 
 void heater_on(){
@@ -555,32 +543,36 @@ void loop() {
 
 
   // 온습도 읽기 및 LCD 출력
-  temperature = read_temperature_digital();
 
+  // temperature = read_temperature_digital();
+  // temperature = 20;
+  if(time_count<10) temperature = 26;
+  if(time_count>10 && time_count<15) temperature = 20;
+  if(time_count>20) temperature = 26;
 
   humidity = read_humidity();
-
-  // Serial.println(temperature);
+  Serial.print("temperatrue : ");
+  Serial.println(temperature);
   display_action(temperature, humidity, water_refill, c);
-  // serial_print(temperature,humidity);
 
   if(c=='a'){ // 자동모드
     // Serial.println("automode 1");
     user_mode=0; //사용자 모드 비활성화 시킴
-    Serial.println("automode");
+    // Serial.println("automode");
 
     waterlevel_check(); // 수위 체크
     execute_waterpump(); // 정해진 시간마다 워터펌프 실행
 
-    if(temperature <= 19){  //18도 이하일때
-
+    if(temperature <= 18){  //18도 이하일때
+      Serial.println("Period 1");
       heater_on();      // 히터 켜기
       sound(HEATER_ON); // 다른 멜로디들은 다 끄고, sound_select에 해당하는 멜로디만 재생, loop돌때마다 반복하지 않게 하는건 loop로 통제
       fan_on(50);      //팬 약하게 틀기(OCR2A 50)
 
       cooler_off();
     }
-    else if(temperature>19 & temperature<23){  // 정상 온도일때
+    else if(temperature>18 & temperature<23){  // 정상 온도일때
+      Serial.println("Period 2");
 
       sound(-1); // 다른 멜로디들은 다 끄기
       heater_off(); // 히터 끄기
@@ -590,6 +582,7 @@ void loop() {
   
     }
     else{  // 23도 이상일때
+      Serial.println("Period 3");
 
       cooler_on();
       fan_on(255);  //팬 켜기(OCR2A 200)
@@ -617,50 +610,50 @@ void loop() {
       switch (c)
       {
         case 'c': //환기팬 on
-          Serial.println("useroperation : fan on");
+          Serial.println("user : fan on");
           fan_on(200);
           break;
         
         case 'd': // 환기팬 off
-          Serial.println("useroperation : fan off");
+          Serial.println("user : fan off");
           fan_off();
           sound(-1); // 다른 멜로디들은 다   끄기
           break;
         case 'e': //워터펌프 on
-          Serial.println("useroperation : pump on");
+          Serial.println("user : pump on");
           PORTB |= (1 << Waterpump_Output_PIN_1);
           sound(WATERPUMP_ON);
           break;
         
         case 'f': //워터펌프 off
-          Serial.println("useroperation : pump off");
+          Serial.println("user : pump off");
           PORTB &= ~(1 << Waterpump_Output_PIN_1);
           sound(-1); // 다른 멜로디들은 다 끄기
           break;
         
         case 'g': // 히팅 on
-          Serial.println("useroperation : heating on");
+          Serial.println("user : heating on");
           heater_on();
           fan_on(50);
           sound(HEATER_ON);
           break;
         
         case 'h': //히팅 off
-          Serial.println("useroperation : heating off");
+          Serial.println("user : heating off");
           heater_off();
           fan_off();
           sound(-1); // 다른 멜로디들은 다 끄기
           break;
         
         case 'i': //쿨링 on
-          Serial.println("useroperation : cooling off");
+          Serial.println("user : cooling off");
           cooler_on();
           fan_on(200);
           sound(COOLER_ON);
           break;
         
         case 'j': //쿨링 off
-          Serial.println("useroperation : cooling off");
+          Serial.println("user : cooling off");
           cooler_off();
           fan_off();
           sound(-1); // 다른 멜로디들은 다 끄기
@@ -670,7 +663,3 @@ void loop() {
   }
   delay(500); // 1초마다 업데이트
 }
-
-
-
-
