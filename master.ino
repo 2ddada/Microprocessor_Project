@@ -1,22 +1,3 @@
-//-----------------MEMO---------------------
-
-
-// LCD Display A4, A5 pin은 I2C 통신때문에 고정적으로 사용해야함!
-// DHT-22 센서는 digital pin
-
-
-//waterlevel 센서
-// 일단 하나 새거 주문하긴 했는데.
-// 기본적으로, num은 인터럽트가 생기는 주기(1초)마다 1씩 커지는 것으로 잡아 두었음. 
-
-//
-
-
-// fan은 timer 0
-// 펌프는 timer 1
-// 피에조 부저 2
-
-
 //---------------------------header files---------------------
 #include <SoftwareSerial.h> // 블루투스 통
 #include <Wire.h>                     // i2C 통신을 위한 라이브러리
@@ -27,11 +8,7 @@
 
 //-------------------define---------------------------------------------
 #define DHTTYPE DHT22   // DHT22 (AM2302) 센서종류 설정
-
-
-#define led_insdie_pin 0x20   // 내장 led pin번호
 #define DHTPIN 2        // SDA 핀의 설정
-
 
 #define Waterpump_Output_PIN_1 3 // 포트b의 3번째 핀
 #define Waterpump_Output_PIN_2 5 // 포트d의 5번째 핀
@@ -88,8 +65,6 @@ uint8_t sound_state_flag[4]={0, 0, 0, 0};
 // 0이면 아예 실행할 필요 없는 상황,
 // 1이면 최초 진입 후 한 사이클 실행중,
 // 2이면 이미 한번 실행 완료했으니 더이상 신경 안쓰기
-
-// flag[0] : fan 실행됐을 때, flag[1] : ....
  
 int user_mode=0; //처음에는 자동화모드로 설정
 char c='a'; // bluetooth로 받은 값, 처음에는 자동화 모드 설정
@@ -107,7 +82,6 @@ ISR(TIMER1_COMPA_vect) {
 //Serial communication setup
 void init_Serial(){
   Serial.begin(9600);
-  // delay(1000);
 }
 
 void display_setup()
@@ -128,12 +102,6 @@ void display_setup()
   lcd.print("Now booting.......");
 }
 
-void init_insideLED(){
-  //내장led 키려고 하는거니까 PortB의 5번 비트 출력으로 설정
-  // DDRB = 0b 0010 0000
-  DDRB |= (1 << led_insdie_pin);
-}
-
 void init_interrupt(){
   SREG |= 0x01 << SREG_I;
 }
@@ -141,8 +109,6 @@ void init_interrupt(){
 //ADC setup
 void init_ADC(){
   //_ADMUX 
-
-
   // Voltage reference를 AVcc로..
   // REFS[1:0] == 01;
   ADMUX |= (0<<REFS1) | (1<<REFS0);
@@ -209,9 +175,6 @@ void fan_setup(){//팬은 Counter 0 사용
   // TCCR0A|=(1<<COM0A1)|(0<<COM0A0);
   TCCR0A &= ~((1<<COM0A1)|(1<<COM0A0));
 
-
-  //인터럽트 활성화
-  // TIMSK0|=(1<<OCIE0A);
 
   //팬의 dutycyle 조절
   OCR0A=200;
@@ -309,9 +272,6 @@ int16_t read_ADC(uint8_t pin) {
 
 
 // 온도체크
-// 일단은 interrupt 안하고 간단히 busywait으로 구현
-// busywait함수를 loop함수에 직접적으로 넣어야하나 아니면 개별 함수마다 넣어야하나?
-// 나중에 interrupt 구현하면 상관없을거같긴 한데 일단은 개별 함수마다 구현해야겠다
 int16_t read_temperature(){
   uint16_t temp_temperature = read_ADC(Temperature_Input_PIN);
   // 이다음에 실제 온도값으로 변경
@@ -346,7 +306,6 @@ void waterlevel_check() {
     sum += water_level[i];
   }
   mean_water_level = sum / 3;
-  // Serial.println(mean_water_level);
   if (temp_water_level < 410) { // 물 보충 필요할 때 : 모든 LED가 깜빡, water_refill 변수 true로
     sound(WATER_REFILL);
     if(time_count % 2 == 0){
@@ -383,7 +342,6 @@ void execute_waterpump(){
   // Serial.println(pumptime_num);
   if (pumptime_num >= 10) PORTB |= (1 << Waterpump_Output_PIN_1);
   else PORTB &= ~(1 << Waterpump_Output_PIN_1);
-  // PORTB |= (1 << Waterpump_Output_PIN_1);
 }
 
 
@@ -468,13 +426,14 @@ void sound_play(uint8_t sound_select){  // i번째 멜로디 출력
 void fan_on(int8_t target){
   // Serial.println("inside fan_on()");
   PORTD |= 0b01000000;  // OC0A(PORTD의 6번비트)출력 주기
-  // TCCR0A |= (1<<COM0A1); // TIMER0 켜기
-  // OCR0A = target;
+  TCCR0A |= (1<<COM0A1); // TIMER0 켜기
+  OCR0A = target;
 }
 
 void fan_off(){
-  // TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
+  TCCR0A &= ~((1 << COM0A1) | (1 << COM0A0));   // 타이머 0 를 비활성화 (TCCR0A의 COM0A 핀만 00 -> noraml port operation, OC0A disconnected)
   PORTD &= ~0b01000000;  // OC0A(PORTD의 6번비트) 출력 끄기
+  Serial.println("COME IN");
 }
 
 void heater_on(){
@@ -519,7 +478,6 @@ void setup() {
   init_ADC();
   timecount_setup();
   init_interrupt();
-  init_insideLED();
   dht.begin();
   pump_setup();
   init_LED();
@@ -533,23 +491,19 @@ void setup() {
 void loop() {
   if (btSerial.available()){  //블루투스로 문자 받아옴
       char temp=btSerial.read();
+      Serial.println(temp);
       if (temp == 'a' || temp == 'b' || temp == 'c' || temp == 'd' ||
           temp == 'e' || temp == 'f' || temp == 'g' || temp == 'h' ||
           temp == 'i' || temp == 'j')
         c=temp;
   }
-  // Serial.print("c: ");
-  // Serial.println(c);
+  Serial.print("c: ");
+  Serial.println(c);
 
 
   // 온습도 읽기 및 LCD 출력
 
   temperature = read_temperature_digital();
-  // temperature = 20;
-  // if(time_count<10) temperature = 26;
-  // if(time_count>10 && time_count<15) temperature = 20;
-  // if(time_count>20) temperature = 26;
-  // if(time_count>30) temperature = 20;
 
   humidity = read_humidity();
   Serial.print("temperatrue : ");
